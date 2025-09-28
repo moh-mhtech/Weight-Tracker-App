@@ -13,7 +13,8 @@ class WeightChart extends StatefulWidget {
 }
 
 class _WeightChartState extends State<WeightChart> {
-  static const int _visibleDays = 14; // Number of days to show at once
+  bool _isPanEnabled = true;
+  bool _isScaleEnabled = true;
 
   @override
   Widget build(BuildContext context) {
@@ -37,28 +38,14 @@ class _WeightChartState extends State<WeightChart> {
     final sortedEntries = List<WeightEntry>.from(widget.weightEntries)
       ..sort((a, b) => a.date.compareTo(b.date));
 
-    // Find the latest measurement date
-    final latestDate = sortedEntries.last.date;
-    
-    // Calculate the 14-day period ending at the latest measurement
-    final endDate = DateTime(latestDate.year, latestDate.month, latestDate.day);
-    final startDate = endDate.subtract(const Duration(days: 13));
-    
-    // Filter entries to the 14-day period
-    final periodEntries = sortedEntries.where((entry) {
-      final entryDate = DateTime(entry.date.year, entry.date.month, entry.date.day);
-      return entryDate.isAfter(startDate.subtract(const Duration(days: 1))) &&
-             entryDate.isBefore(endDate.add(const Duration(days: 1)));
-    }).toList();
-
-    if (periodEntries.isEmpty) {
+    if (sortedEntries.isEmpty) {
       return const Card(
         margin: EdgeInsets.all(16),
         child: Padding(
           padding: EdgeInsets.all(32),
           child: Center(
             child: Text(
-              'No data available for the selected period.',
+              'No weight data available.\nAdd some weight entries to see the chart.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 16, color: Colors.grey),
             ),
@@ -67,6 +54,11 @@ class _WeightChartState extends State<WeightChart> {
       );
     }
 
+    // Find date range for all data
+    final earliestDate = sortedEntries.first.date;
+    final latestDate = sortedEntries.last.date;
+    final totalDays = latestDate.difference(earliestDate).inDays + 1;
+
     // Group entries by date for running average calculation
     final Map<String, List<WeightEntry>> dailyGroups = {};
     for (final entry in sortedEntries) {
@@ -74,7 +66,7 @@ class _WeightChartState extends State<WeightChart> {
       dailyGroups.putIfAbsent(dateKey, () => []).add(entry);
     }
 
-    // Calculate daily averages for running average calculation
+    // Calculate daily averages
     final List<WeightEntry> dailyAverages = [];
     dailyGroups.forEach((dateKey, dayEntries) {
       final sum = dayEntries.fold<double>(0, (sum, entry) => sum + entry.weight);
@@ -88,12 +80,12 @@ class _WeightChartState extends State<WeightChart> {
     // Sort daily averages by date
     dailyAverages.sort((a, b) => a.date.compareTo(b.date));
 
-    // Calculate running averages for the visible period
-    final runningAverages = _calculateRunningAveragesForPeriod(
-      dailyAverages, 
-      startDate, 
-      endDate,
-    );
+    // Calculate running averages for all data
+    final runningAverages = _calculateRunningAveragesForAllData(dailyAverages);
+
+    // Calculate all measurement spots
+    final allMeasurementSpots = _calculateAllMeasurementSpots(sortedEntries, earliestDate);
+    final allRunningAverageSpots = _calculateAllRunningAverageSpots(runningAverages, earliestDate);
 
     return Card(
       margin: const EdgeInsets.all(16),
@@ -104,103 +96,102 @@ class _WeightChartState extends State<WeightChart> {
           children: [
             SizedBox(
               height: 300,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  // Calculate responsive day width based on available space
-                  final availableWidth = constraints.maxWidth; // Use full available width
-                  
-                  return SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    physics: const NeverScrollableScrollPhysics(), // Disable built-in scrolling
-                    child: SizedBox(
-                      width: availableWidth,
-                      child: LineChart(
-                      LineChartData(
-                        gridData: FlGridData(
-                          show: true,
-                          horizontalInterval: 1,
-                          verticalInterval: 1,
-                        ),
-                        titlesData: FlTitlesData(
-                          leftTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              reservedSize: 40,
-                              getTitlesWidget: (value, meta) {
-                                return Text(
-                                  '${value.toStringAsFixed(1)}',
-                                  style: const TextStyle(fontSize: 10),
-                                );
-                              },
-                            ),
-                          ),
-                          bottomTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              reservedSize: 30,
-                              interval: 1, // Show every day
-                              getTitlesWidget: (value, meta) {
-                                final dayIndex = value.toInt();
-                                if (dayIndex >= 0 && dayIndex < _visibleDays) {
-                                  final date = startDate.add(Duration(days: dayIndex));
-                                  return Text(
-                                    DateFormat('dd/MM').format(date),
-                                    style: const TextStyle(fontSize: 10),
-                                  );
-                                }
-                                return const Text('');
-                              },
-                            ),
-                          ),
-                          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        ),
-                        borderData: FlBorderData(show: true),
-                        minX: 0,
-                        maxX: (_visibleDays - 1).toDouble(),
-                        minY: _getMinWeight(periodEntries) - 1,
-                        maxY: _getMaxWeight(periodEntries) + 1,
-                        lineBarsData: [
-                          // Individual measurements as dots (no lines, no tooltips)
-                          LineChartBarData(
-                            spots: _calculateMeasurementSpots(periodEntries, startDate),
-                            isCurved: false,
-                            color: Colors.transparent, // Make line transparent
-                            barWidth: 0, // No line width
-                            isStrokeCapRound: true,
-                            dotData: FlDotData(
-                              show: true,
-                              getDotPainter: (spot, percent, barData, index) {
-                                return FlDotCirclePainter(
-                                  radius: 4,
-                                  color: Colors.blue,
-                                  strokeWidth: 2,
-                                  strokeColor: Colors.white,
-                                );
-                              },
-                            ),
-                            belowBarData: BarAreaData(show: false),
-                            preventCurveOverShooting: false,
-                          ),
-                          // Running average line
-                          LineChartBarData(
-                            spots: _calculateRunningAverageSpots(runningAverages, startDate),
-                            isCurved: true,
-                            color: Colors.red,
-                            barWidth: 2,
-                            isStrokeCapRound: true,
-                            dotData: const FlDotData(show: false),
-                            belowBarData: BarAreaData(show: false),
-                          ),
-                        ],
-                        lineTouchData: LineTouchData(
-                          enabled: false,
-                        ),
+              child: LineChart(
+                LineChartData(
+                  gridData: FlGridData(
+                    show: true,
+                    horizontalInterval: 1,
+                    verticalInterval: 1,
+                  ),
+                  titlesData: FlTitlesData(
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 40,
+                        getTitlesWidget: (value, meta) {
+                          return Text(
+                            '${value.toStringAsFixed(1)}',
+                            style: const TextStyle(fontSize: 10),
+                          );
+                        },
                       ),
                     ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 30,
+                        interval: 1, // Show every day
+                        getTitlesWidget: (value, meta) {
+                          final dayIndex = value.toInt();
+                          if (dayIndex >= 0 && dayIndex < totalDays) {
+                            final date = earliestDate.add(Duration(days: dayIndex));
+                            return Text(
+                              DateFormat('dd/MM').format(date),
+                              style: const TextStyle(fontSize: 10),
+                            );
+                          }
+                          return const Text('');
+                        },
+                      ),
+                    ),
+                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   ),
-                );
-                },
+                  borderData: FlBorderData(show: true),
+                  minX: 0,
+                  maxX: totalDays - 1.0,
+                  minY: _getMinWeight(sortedEntries) - 1,
+                  maxY: _getMaxWeight(sortedEntries) + 1,
+                  lineBarsData: [
+                    // Individual measurements as dots
+                    LineChartBarData(
+                      spots: allMeasurementSpots,
+                      isCurved: false,
+                      color: Colors.transparent,
+                      barWidth: 0,
+                      isStrokeCapRound: true,
+                      dotData: FlDotData(
+                        show: true,
+                        getDotPainter: (spot, percent, barData, index) {
+                          return FlDotCirclePainter(
+                            radius: 4,
+                            color: Colors.blue,
+                            strokeWidth: 2,
+                            strokeColor: Colors.white,
+                          );
+                        },
+                      ),
+                      belowBarData: BarAreaData(show: false),
+                    ),
+                    // Running average line
+                    LineChartBarData(
+                      spots: allRunningAverageSpots,
+                      isCurved: true,
+                      color: Colors.red,
+                      barWidth: 2,
+                      isStrokeCapRound: true,
+                      dotData: const FlDotData(show: false),
+                      belowBarData: BarAreaData(show: false),
+                    ),
+                  ],
+                  lineTouchData: LineTouchData(
+                    enabled: true,
+                    handleBuiltInTouches: true,
+                    touchTooltipData: LineTouchTooltipData(
+                      tooltipBgColor: Colors.blue.withOpacity(0.8),
+                      getTooltipItems: (touchedSpots) {
+                        return touchedSpots.map((touchedSpot) {
+                          final dayIndex = touchedSpot.x.toInt();
+                          final date = earliestDate.add(Duration(days: dayIndex));
+                          return LineTooltipItem(
+                            '${DateFormat('dd/MM/yyyy').format(date)}\n${touchedSpot.y.toStringAsFixed(1)} kg',
+                            const TextStyle(color: Colors.white, fontSize: 12),
+                          );
+                        }).toList();
+                      },
+                    ),
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 16),
@@ -229,47 +220,100 @@ class _WeightChartState extends State<WeightChart> {
                 const Text('5-Day Average'),
               ],
             ),
+            const SizedBox(height: 8),
+            // Pan and Scale controls
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                const Text('Pan'),
+                Switch(
+                  value: _isPanEnabled,
+                  onChanged: (value) {
+                    setState(() {
+                      _isPanEnabled = value;
+                    });
+                  },
+                ),
+                const SizedBox(width: 16),
+                const Text('Scale'),
+                Switch(
+                  value: _isScaleEnabled,
+                  onChanged: (value) {
+                    setState(() {
+                      _isScaleEnabled = value;
+                    });
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            // Transformation control buttons
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.add),
+                  onPressed: () {
+                    // Zoom in functionality would go here
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.remove),
+                  onPressed: () {
+                    // Zoom out functionality would go here
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: () {
+                    // Reset functionality would go here
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Drag to pan, pinch to zoom through your weight history',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  List<FlSpot> _calculateMeasurementSpots(List<WeightEntry> entries, DateTime startDate) {
+  List<FlSpot> _calculateAllMeasurementSpots(List<WeightEntry> entries, DateTime startDate) {
     final spots = <FlSpot>[];
     
     for (final entry in entries) {
       final entryDate = DateTime(entry.date.year, entry.date.month, entry.date.day);
-      final daysFromStart = entryDate.difference(startDate).inDays;
-      
-      if (daysFromStart >= 0 && daysFromStart < _visibleDays) {
-        spots.add(FlSpot(daysFromStart.toDouble(), entry.weight));
-      }
+      final daysFromStart = entryDate.difference(startDate).inDays.toDouble();
+      spots.add(FlSpot(daysFromStart, entry.weight));
     }
     
     return spots;
   }
 
-  List<FlSpot> _calculateRunningAverageSpots(List<double> runningAverages, DateTime startDate) {
+  List<FlSpot> _calculateAllRunningAverageSpots(List<double> runningAverages, DateTime startDate) {
     final spots = <FlSpot>[];
     
-    for (int i = 0; i < runningAverages.length && i < _visibleDays; i++) {
+    for (int i = 0; i < runningAverages.length; i++) {
       spots.add(FlSpot(i.toDouble(), runningAverages[i]));
     }
     
     return spots;
   }
 
-  List<double> _calculateRunningAveragesForPeriod(
-    List<WeightEntry> dailyAverages, 
-    DateTime startDate, 
-    DateTime endDate,
-  ) {
+  List<double> _calculateRunningAveragesForAllData(List<WeightEntry> dailyAverages) {
     final averages = <double>[];
     
-    // Generate running averages for each day in the 14-day period
-    for (int day = 0; day < 14; day++) {
-      final currentDate = startDate.add(Duration(days: day));
+    // Generate running averages for each day in the dataset
+    for (int i = 0; i < dailyAverages.length; i++) {
+      final currentDate = dailyAverages[i].date;
       final startRangeDate = currentDate.subtract(const Duration(days: 4));
       
       final relevantDailyAverages = dailyAverages.where((entry) {

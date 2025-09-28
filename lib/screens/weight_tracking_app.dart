@@ -5,6 +5,7 @@ import '../models/weight_entry.dart';
 import '../database/database_helper.dart';
 import '../widgets/weight_entry_form.dart';
 import '../widgets/weight_chart.dart';
+import '../widgets/simple_pan_zoom_chart.dart';
 import '../services/sample_data_service.dart';
 
 class WeightTrackingApp extends StatefulWidget {
@@ -94,15 +95,35 @@ class _WeightTrackingAppState extends State<WeightTrackingApp> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
+          : DefaultTabController(
+              length: 2,
               child: Column(
                 children: [
-                  WeightEntryForm(onWeightAdded: _loadWeightEntries),
-                  WeightChart(weightEntries: _weightEntries),
-                  if (_weightEntries.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    _buildWeightHistory(),
-                  ],
+                  const TabBar(
+                    tabs: [
+                      Tab(text: 'My Weight Chart'),
+                      Tab(text: 'Sample Chart (Pan/Zoom)'),
+                    ],
+                  ),
+                  Expanded(
+                    child: TabBarView(
+                      children: [
+                        SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              WeightEntryForm(onWeightAdded: _loadWeightEntries),
+                              WeightChart(weightEntries: _weightEntries),
+                              if (_weightEntries.isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                _buildWeightHistory(),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SimplePanZoomChart(),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
