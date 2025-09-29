@@ -1,11 +1,11 @@
 {
-    "name": "weight_tracking_app",
-    "short_name": "weight_tracking_app",
+    "name": "Weight Graph",
+    "short_name": "Weight Graph",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Weight Graph - A weight tracking app with moving average graphs and interactive charts.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

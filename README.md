@@ -1,11 +1,11 @@
-# Weight Tracker App
+# WeightGraph: Moving Average Chart
 
-A Flutter application for tracking weight measurements with interactive charts and running averages.
+A Flutter application for tracking weight measurements with interactive charts and moving averages.
 
 ## Features
 
 - **Weight Entry**: Add weight measurements with date selection
-- **Interactive Chart**: 14-day rolling chart showing individual measurements and 5-day running average
+- **Interactive Chart**: Interactive chart showing individual measurements and moving average
 - **Data Management**: Edit and delete weight entries
 - **Cross-Platform**: Works on Android, iOS, Web, Windows, macOS, and Linux
 - **Sample Data**: Includes realistic sample data for testing (debug mode only)
@@ -15,7 +15,7 @@ A Flutter application for tracking weight measurements with interactive charts a
 
 The app includes:
 - Clean weight entry form with date picker
-- Interactive chart with blue dots for measurements and red line for running average
+- Interactive chart with blue dots for measurements and red line for moving average
 - Comprehensive data table with edit/delete functionality
 - Sample data generation for testing
 

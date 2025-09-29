@@ -13,7 +13,7 @@ class WeightChart extends StatefulWidget {
 }
 
 class _WeightChartState extends State<WeightChart> {
-  static const int _visibleDays = 14; // Number of days to show at once
+  static const int _visibleDays = 7; // Number of days to show at once
 
   @override
   Widget build(BuildContext context) {
@@ -40,11 +40,11 @@ class _WeightChartState extends State<WeightChart> {
     // Find the latest measurement date
     final latestDate = sortedEntries.last.date;
     
-    // Calculate the 14-day period ending at the latest measurement
+    // Calculate the 7-day period ending at the latest measurement
     final endDate = DateTime(latestDate.year, latestDate.month, latestDate.day);
-    final startDate = endDate.subtract(const Duration(days: 13));
+    final startDate = endDate.subtract(const Duration(days: 6));
     
-    // Filter entries to the 14-day period
+    // Filter entries to the 7-day period
     final periodEntries = sortedEntries.where((entry) {
       final entryDate = DateTime(entry.date.year, entry.date.month, entry.date.day);
       return entryDate.isAfter(startDate.subtract(const Duration(days: 1))) &&
@@ -88,12 +88,7 @@ class _WeightChartState extends State<WeightChart> {
     // Sort daily averages by date
     dailyAverages.sort((a, b) => a.date.compareTo(b.date));
 
-    // Calculate running averages for the visible period
-    final runningAverages = _calculateRunningAveragesForPeriod(
-      dailyAverages, 
-      startDate, 
-      endDate,
-    );
+    // No need to pre-calculate running averages - we'll calculate them per data point
 
     return Card(
       margin: const EdgeInsets.all(16),
@@ -137,15 +132,18 @@ class _WeightChartState extends State<WeightChart> {
                           bottomTitles: AxisTitles(
                             sideTitles: SideTitles(
                               showTitles: true,
-                              reservedSize: 30,
+                              reservedSize: 40,
                               interval: 1, // Show every day
                               getTitlesWidget: (value, meta) {
                                 final dayIndex = value.toInt();
                                 if (dayIndex >= 0 && dayIndex < _visibleDays) {
                                   final date = startDate.add(Duration(days: dayIndex));
-                                  return Text(
-                                    DateFormat('dd/MM').format(date),
-                                    style: const TextStyle(fontSize: 10),
+                                  return Transform.rotate(
+                                    angle: -0.5, // Rotate -0.5 radians (about -28 degrees)
+                                    child: Text(
+                                      DateFormat('dd MMM').format(date).toLowerCase(),
+                                      style: const TextStyle(fontSize: 10),
+                                    ),
                                   );
                                 }
                                 return const Text('');
@@ -173,7 +171,7 @@ class _WeightChartState extends State<WeightChart> {
                               getDotPainter: (spot, percent, barData, index) {
                                 return FlDotCirclePainter(
                                   radius: 4,
-                                  color: Colors.blue,
+                                  color: Colors.grey, // Grey for measurement points
                                   strokeWidth: 2,
                                   strokeColor: Colors.white,
                                 );
@@ -184,9 +182,9 @@ class _WeightChartState extends State<WeightChart> {
                           ),
                           // Running average line
                           LineChartBarData(
-                            spots: _calculateRunningAverageSpots(runningAverages, startDate),
+                            spots: _calculateRunningAverageSpots(periodEntries, startDate),
                             isCurved: true,
-                            color: Colors.red,
+                            color: const Color(0xFF608162), // Secondary green for moving average
                             barWidth: 2,
                             isStrokeCapRound: true,
                             dotData: const FlDotData(show: false),
@@ -210,7 +208,7 @@ class _WeightChartState extends State<WeightChart> {
                   width: 12,
                   height: 12,
                   decoration: const BoxDecoration(
-                    color: Colors.blue,
+                    color: Colors.grey, // Grey for measurements
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -221,12 +219,12 @@ class _WeightChartState extends State<WeightChart> {
                   width: 12,
                   height: 12,
                   decoration: const BoxDecoration(
-                    color: Colors.red,
+                    color: const Color(0xFF608162), // Secondary green
                     shape: BoxShape.circle,
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Text('5-Day Average'),
+                const Text('5-day Average'),
               ],
             ),
           ],
@@ -250,44 +248,41 @@ class _WeightChartState extends State<WeightChart> {
     return spots;
   }
 
-  List<FlSpot> _calculateRunningAverageSpots(List<double> runningAverages, DateTime startDate) {
+  List<FlSpot> _calculateRunningAverageSpots(List<WeightEntry> periodEntries, DateTime startDate) {
     final spots = <FlSpot>[];
     
-    for (int i = 0; i < runningAverages.length && i < _visibleDays; i++) {
-      spots.add(FlSpot(i.toDouble(), runningAverages[i]));
+    // Calculate running average for each actual data point
+    for (int i = 0; i < periodEntries.length; i++) {
+      final entry = periodEntries[i];
+      final entryDate = DateTime(entry.date.year, entry.date.month, entry.date.day);
+      
+      // Calculate running average for this specific entry
+      final runningAvg = _calculateRunningAverageForEntry(periodEntries, entryDate);
+      
+      // Calculate X position based on days from start date
+      final daysFromStart = entryDate.difference(startDate).inDays;
+      spots.add(FlSpot(daysFromStart.toDouble(), runningAvg));
     }
     
     return spots;
   }
 
-  List<double> _calculateRunningAveragesForPeriod(
-    List<WeightEntry> dailyAverages, 
-    DateTime startDate, 
-    DateTime endDate,
-  ) {
-    final averages = <double>[];
+  double _calculateRunningAverageForEntry(List<WeightEntry> entries, DateTime targetDate) {
+    // Get all entries within 5 days before the target date (including the target date)
+    final startRangeDate = targetDate.subtract(const Duration(days: 4));
     
-    // Generate running averages for each day in the 14-day period
-    for (int day = 0; day < 14; day++) {
-      final currentDate = startDate.add(Duration(days: day));
-      final startRangeDate = currentDate.subtract(const Duration(days: 4));
-      
-      final relevantDailyAverages = dailyAverages.where((entry) {
-        final entryDate = DateTime(entry.date.year, entry.date.month, entry.date.day);
-        return entryDate.isAfter(startRangeDate.subtract(const Duration(days: 1))) &&
-               entryDate.isBefore(currentDate.add(const Duration(days: 1)));
-      }).toList();
-      
-      if (relevantDailyAverages.isNotEmpty) {
-        final sum = relevantDailyAverages.fold<double>(0, (sum, entry) => sum + entry.weight);
-        averages.add(sum / relevantDailyAverages.length);
-      } else {
-        // If no data for this day, use the previous average or 0
-        averages.add(averages.isNotEmpty ? averages.last : 0.0);
-      }
+    final relevantEntries = entries.where((entry) {
+      final entryDate = DateTime(entry.date.year, entry.date.month, entry.date.day);
+      return entryDate.isAfter(startRangeDate.subtract(const Duration(days: 1))) &&
+             entryDate.isBefore(targetDate.add(const Duration(days: 1)));
+    }).toList();
+    
+    if (relevantEntries.isEmpty) {
+      return 0.0;
     }
     
-    return averages;
+    final sum = relevantEntries.fold<double>(0, (sum, entry) => sum + entry.weight);
+    return sum / relevantEntries.length;
   }
 
   double _getMinWeight(List<WeightEntry> entries) {

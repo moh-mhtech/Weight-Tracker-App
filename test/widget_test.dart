@@ -7,14 +7,14 @@
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:weight_tracking_app/main.dart';
+import '../lib/main.dart';
 
 void main() {
-  testWidgets('Weight Tracker app smoke test', (WidgetTester tester) async {
+  testWidgets('WeightGraph app smoke test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const WeightTrackerApp());
+    await tester.pumpWidget(const WeightGraphApp());
 
     // Verify that our app loads without errors.
-    expect(find.text('Weight Tracker'), findsOneWidget);
+    expect(find.text('WeightGraph'), findsOneWidget);
   });
 }

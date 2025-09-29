@@ -73,56 +73,55 @@ class _WeightEntryFormState extends State<WeightEntryForm> {
         padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
-          child: Row(
+          child: Column(
             children: [
-              Expanded(
-                flex: 2,
-                child: TextFormField(
-                  controller: _weightController,
-                  keyboardType: TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Weight (kg)',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.monitor_weight),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your weight';
-                    }
-                    final weight = double.tryParse(value);
-                    if (weight == null || weight <= 0) {
-                      return 'Please enter a valid weight';
-                    }
-                    return null;
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: InkWell(
-                  onTap: _selectDate,
-                  child: InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Date',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.calendar_today),
-                    ),
-                    child: Text(
-                      DateFormat('yyyy-MM-dd').format(_selectedDate),
-                      style: const TextStyle(fontSize: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _weightController,
+                      keyboardType: TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                        labelText: 'Weight (kg)',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your weight';
+                        }
+                        final weight = double.tryParse(value);
+                        if (weight == null || weight <= 0) {
+                          return 'Please enter a valid weight';
+                        }
+                        return null;
+                      },
                     ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: InkWell(
+                      onTap: _selectDate,
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Date',
+                          border: OutlineInputBorder(),
+                        ),
+                        child: Text(
+                          DateFormat('yyyy-MM-dd').format(_selectedDate),
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              ElevatedButton(
-                onPressed: _saveWeight,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.all(16),
-                  shape: const CircleBorder(),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _saveWeight,
+                  child: const Text('Add'),
                 ),
-                child: const Icon(Icons.add, size: 24),
               ),
             ],
           ),
