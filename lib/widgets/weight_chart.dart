@@ -18,7 +18,7 @@ class _WeightChartState extends State<WeightChart> {
   @override
   Widget build(BuildContext context) {
     if (widget.weightEntries.isEmpty) {
-      return const Card(
+      return Card(
         margin: EdgeInsets.all(16),
         child: Padding(
           padding: EdgeInsets.all(32),
@@ -26,7 +26,7 @@ class _WeightChartState extends State<WeightChart> {
             child: Text(
               'No weight data available.\nAdd some weight entries to see the chart.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: Colors.grey),
+              style: TextStyle(fontSize: 16, color: Theme.of(context).colorScheme.onSecondary),
             ),
           ),
         ),
@@ -139,7 +139,7 @@ class _WeightChartState extends State<WeightChart> {
                                 if (dayIndex >= 0 && dayIndex < _visibleDays) {
                                   final date = startDate.add(Duration(days: dayIndex));
                                   return Transform.rotate(
-                                    angle: -0.5, // Rotate -0.5 radians (about -28 degrees)
+                                    angle: -0.8, // Rotate -0.5 radians (about -28 degrees)
                                     child: Text(
                                       DateFormat('dd MMM').format(date).toLowerCase(),
                                       style: const TextStyle(fontSize: 10),
@@ -156,9 +156,19 @@ class _WeightChartState extends State<WeightChart> {
                         borderData: FlBorderData(show: true),
                         minX: 0,
                         maxX: (_visibleDays - 1).toDouble(),
-                        minY: _getMinWeight(periodEntries) - 1,
-                        maxY: _getMaxWeight(periodEntries) + 1,
+                        minY: _getMinWeight(periodEntries) - 0.5,
+                        maxY: _getMaxWeight(periodEntries) + 0.5,
                         lineBarsData: [
+                          // Running average line
+                          LineChartBarData(
+                            spots: _calculateRunningAverageSpots(periodEntries, startDate),
+                            isCurved: true,
+                            color: Theme.of(context).colorScheme.tertiary, // Tertiary orange for moving average
+                            barWidth: 2,
+                            isStrokeCapRound: true,
+                            dotData: const FlDotData(show: false),
+                            belowBarData: BarAreaData(show: false),
+                          ),
                           // Individual measurements as dots (no lines, no tooltips)
                           LineChartBarData(
                             spots: _calculateMeasurementSpots(periodEntries, startDate),
@@ -171,26 +181,16 @@ class _WeightChartState extends State<WeightChart> {
                               getDotPainter: (spot, percent, barData, index) {
                                 return FlDotCirclePainter(
                                   radius: 4,
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  color: Theme.of(context).colorScheme.primary,
                                   strokeWidth: 2,
-                                  strokeColor: Colors.white,
+                                  strokeColor: Colors.grey[100]!,
                                 );
                               },
                             ),
                             belowBarData: BarAreaData(show: false),
                             preventCurveOverShooting: false,
                           ),
-                          // Running average line
-                          LineChartBarData(
-                            spots: _calculateRunningAverageSpots(periodEntries, startDate),
-                            isCurved: true,
-                            color: Theme.of(context).colorScheme.primary, // Secondary green for moving average
-                            barWidth: 2,
-                            isStrokeCapRound: true,
-                            dotData: const FlDotData(show: false),
-                            belowBarData: BarAreaData(show: false),
-                          ),
-                        ],
+                          ],
                         lineTouchData: LineTouchData(
                           enabled: false,
                         ),
@@ -208,7 +208,7 @@ class _WeightChartState extends State<WeightChart> {
                   width: 12,
                   height: 12,
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    color: Theme.of(context).colorScheme.primary,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -219,7 +219,7 @@ class _WeightChartState extends State<WeightChart> {
                   width: 12,
                   height: 12,
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary,
+                    color: Theme.of(context).colorScheme.tertiary,
                     shape: BoxShape.circle,
                   ),
                 ),

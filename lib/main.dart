@@ -18,33 +18,32 @@ class WeightGraphApp extends StatelessWidget {
           brightness: Brightness.light,
         ).copyWith(
           // Primary colors (matching logo greens)
-          primary: const Color(0xFF5D7D5F),
-          onPrimary: const Color(0xFFFBE9CE), // Cream text on green
+          primary: const Color(0xFF5d7d5f), // Green
+          onPrimary: const Color(0xFFfbe9ce), // Cream
           
           // Secondary colors
-          secondary: const Color(0xFF608162),
-          onSecondary: const Color(0xFFFBE9CE),
+          secondary: const Color(0xFFFFFFFF), // White
+          onSecondary: Colors.grey, // Default Material text color (grey[900])
+
+          tertiary: const Color(0xFFe87d5f), // Orange
+          onTertiary: Colors.white,
           
           // Surface colors
-          surface: const Color(0xFFFBE9CE), // Cream background
-          onSurface: const Color(0xFF202C1F), // Dark green text
-          
-          // Background colors
-          background: const Color(0xFFFBE9CE),
-          onBackground: const Color(0xFF202C1F),
-          
+          surface: const Color(0xFFfbe9ce), // Cream
+          // onSurface: const Color(0xFF5d7d5f), // Green
+                    
           // Error colors (keeping red for errors)
-          error: const Color(0xFFD32F2F),
+          error: const Color(0xFFe87d5f),
           onError: Colors.white,
           
           // Outline colors
-          outline: const Color(0xFF5D7D5F),
-          outlineVariant: const Color(0xFF608162),
+          // outline: const Color(0xFF5D7D5F),
+          // outlineVariant: const Color(0xFF608162),
           
           // Inverse colors
-          inversePrimary: const Color(0xFF41553F),
-          inverseSurface: const Color(0xFF202C1F),
-          onInverseSurface: const Color(0xFFFBE9CE),
+          inversePrimary: const Color(0xFF5d7d5f),
+          // inverseSurface: const Color(0xFF202C1F),
+          // onInverseSurface: const Color(0xFFFBE9CE),
         ),
         useMaterial3: true,
       ),

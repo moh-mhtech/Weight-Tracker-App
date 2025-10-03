@@ -81,6 +81,7 @@ class _WeightEntryFormState extends State<WeightEntryForm> {
                     child: TextFormField(
                       controller: _weightController,
                       keyboardType: TextInputType.numberWithOptions(decimal: true),
+                      style: TextStyle(color: Theme.of(context).colorScheme.tertiary),
                       decoration: const InputDecoration(
                         labelText: 'Weight (kg)',
                         border: OutlineInputBorder(),
@@ -110,7 +111,7 @@ class _WeightEntryFormState extends State<WeightEntryForm> {
                         ),
                         child: Text(
                           DateFormat('yyyy-MM-dd').format(_selectedDate),
-                          style: const TextStyle(fontSize: 16),
+                          // style: const TextStyle(fontSize: 16),
                         ),
                       ),
                     ),
@@ -121,6 +122,10 @@ class _WeightEntryFormState extends State<WeightEntryForm> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  ),
                   onPressed: _saveWeight,
                   child: const Text('Add'),
                 ),

@@ -58,8 +58,7 @@ class WeightEntryTable extends StatelessWidget {
                       DateFormat('dd/MM/yy').format(entry.date),
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey,
-                        // color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        color: Theme.of(context).colorScheme.onSecondary,
                         fontWeight: FontWeight.w500,
                         
                       ),
@@ -79,7 +78,7 @@ class WeightEntryTable extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w600,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                color: Theme.of(context).colorScheme.primary,
                               ),
                               overflow: TextOverflow.visible
                             ),
@@ -92,7 +91,7 @@ class WeightEntryTable extends StatelessWidget {
                                     text: 'avg ',
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: Theme.of(context).colorScheme.primary,
+                                      color: Theme.of(context).colorScheme.tertiary,
                                       fontWeight: FontWeight.w500,
                                     ),
                                   ),
@@ -100,7 +99,7 @@ class WeightEntryTable extends StatelessWidget {
                                     text: '${runningAvg.toStringAsFixed(1)} kg',
                                     style: TextStyle(
                                       fontSize: 18,
-                                      color: Theme.of(context).colorScheme.primary,
+                                      color: Theme.of(context).colorScheme.tertiary,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -114,8 +113,7 @@ class WeightEntryTable extends StatelessWidget {
                               IconButton(
                                 iconSize: 22,
                                 icon: const Icon(Icons.edit),
-                                // color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                color: Colors.grey,
+                                color: Theme.of(context).colorScheme.onSecondary,
                                 onPressed: () => onEditEntry(entry),
                                 padding: EdgeInsets.zero,
                                 style: ButtonStyle(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
@@ -127,8 +125,7 @@ class WeightEntryTable extends StatelessWidget {
                               IconButton(
                                   iconSize: 22,
                                   icon: const Icon(Icons.delete),
-                                  // color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                  color: Colors.grey,
+                                  color: Theme.of(context).colorScheme.onSecondary,
                                   style: ButtonStyle(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                                   onPressed: () => onDeleteEntry(entry),
                                   padding: EdgeInsets.zero,

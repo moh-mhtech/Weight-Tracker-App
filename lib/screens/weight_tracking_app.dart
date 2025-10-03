@@ -65,36 +65,35 @@ class _WeightTrackingAppState extends State<WeightTrackingApp> {
     return Scaffold(
       appBar: AppBar(
         title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            AppLogo(size: 32, color: Theme.of(context).colorScheme.background),
-            const SizedBox(width: 12),
-            Text(
-              'Weight Graph',
-              style: TextStyle(color: Theme.of(context).colorScheme.background),
+            AppLogo(
+              size: 32,
+              color: Theme.of(context).colorScheme.onPrimary,
             ),
+            const SizedBox(width: 12),
+            const Text('Weight Graph'),
           ],
         ),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        foregroundColor: Theme.of(context).colorScheme.background,
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
         actions: [
           if (kDebugMode && _weightEntries.length >= 30) ...[
             Container(
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.2),
+                color: Theme.of(context).colorScheme.tertiary,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.orange),
               ),
-              child: const Text(
+              child: Text(
                 'SAMPLE DATA',
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
-                  color: Colors.orange,
+                  color: Theme.of(context).colorScheme.onTertiary),
                 ),
               ),
-            ),
           ],
         ],
       ),
