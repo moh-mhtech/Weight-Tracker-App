@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../database/database_helper.dart';
+import '../services/settings_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -12,6 +12,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
+  final SettingsService _settingsService = SettingsService();
   late TextEditingController _averagePeriodController;
   
   // Settings state
@@ -33,22 +34,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-        
+    final unit = await _settingsService.getWeightUnit();
+    final format = await _settingsService.getDateFormat();
+    final days = await _settingsService.getRunningAverageDays();
+    
     setState(() {
-      _weightUnit = prefs.getString('weight_unit') ?? 'kg';
-      _dateFormat = prefs.getString('date_format') ?? 'dd/MM/yyyy';
-      _runningAverageDays = prefs.getInt('running_average_days') ?? 5;
+      _weightUnit = unit;
+      _dateFormat = format;
+      _runningAverageDays = days;
     });
     _averagePeriodController.text = _runningAverageDays.toString();
   }
 
-  Future<void> _saveSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('weight_unit', _weightUnit);
-    await prefs.setString('date_format', _dateFormat);
-    await prefs.setInt('running_average_days', _runningAverageDays);
-  }
 
   Future<void> _clearAllData() async {
     final confirmed = await showDialog<bool>(
@@ -107,17 +104,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: const Text('Weight Unit'),
               trailing: DropdownButton<String>(
                 value: _weightUnit,
-                onChanged: (String? newValue) {
+                onChanged: (String? newValue) async {
                   if (newValue != null) {
                     setState(() {
                       _weightUnit = newValue;
                     });
-                    _saveSettings();
+                    await _settingsService.setWeightUnit(newValue);
                   }
                 },
                 items: const [
-                  DropdownMenuItem(value: 'kg', child: Text('Kilograms (kg)')),
-                  DropdownMenuItem(value: 'lbs', child: Text('Pounds (lbs)')),
+                  DropdownMenuItem(value: 'kg', child: Text('kg')),
+                  DropdownMenuItem(value: 'lbs', child: Text('lbs')),
                 ],
               ),
             ),
@@ -131,12 +128,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: const Text('Date Format'),
               trailing: DropdownButton<String>(
                 value: _dateFormat,
-                onChanged: (String? newValue) {
+                onChanged: (String? newValue) async {
                   if (newValue != null) {
                     setState(() {
                       _dateFormat = newValue;
                     });
-                    _saveSettings();
+                    await _settingsService.setDateFormat(newValue);
                   }
                 },
                 items: const [
@@ -155,29 +152,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
                     'Average Period',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(width: 16),
-                  TextField(
+                  SizedBox(
+                    width: 70,
+                    child: TextField(
+                      textAlign: TextAlign.right,
                       controller: _averagePeriodController,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(
                         labelText: 'Days',
                         border: OutlineInputBorder(),
                       ),
-                      onChanged: (value) {
+                      onChanged: (value) async {
                         final parsedValue = int.tryParse(value);
                         if (parsedValue != null && parsedValue > 0) {
                           setState(() {
                             _runningAverageDays = parsedValue;
                           });
-                          _saveSettings();
+                          await _settingsService.setRunningAverageDays(parsedValue);
                         }
                       },
                     ),
+                  ),
                   
                 ],
               ),

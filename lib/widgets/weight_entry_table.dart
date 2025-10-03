@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/weight_entry.dart';
+import '../services/settings_service.dart';
 
-class WeightEntryTable extends StatelessWidget {
+class WeightEntryTable extends StatefulWidget {
   final List<WeightEntry> weightEntries;
   final int visibleEntriesCount;
   final Function(WeightEntry) onEditEntry;
@@ -21,16 +22,47 @@ class WeightEntryTable extends StatelessWidget {
   });
 
   @override
+  State<WeightEntryTable> createState() => _WeightEntryTableState();
+}
+
+class _WeightEntryTableState extends State<WeightEntryTable> {
+  final SettingsService _settingsService = SettingsService();
+  String _weightUnit = 'kg';
+  String _dateFormat = 'dd/MM/yyyy';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh settings when returning from settings
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final unit = await _settingsService.getWeightUnit();
+    final format = await _settingsService.getDateFormat();
+    setState(() {
+      _weightUnit = unit;
+      _dateFormat = format;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     // Show only the visible entries (newest first)
-    final visibleEntries = weightEntries.reversed.take(visibleEntriesCount).toList();
+    final visibleEntries = widget.weightEntries.reversed.take(widget.visibleEntriesCount).toList();
 
     // Calculate running averages for all entries
-    final runningAverages = _calculateRunningAverages(weightEntries);
+    final runningAverages = _calculateRunningAverages(widget.weightEntries);
     
     // Create a map of entry index to running average
     final Map<int, double> entryToRunningAverage = {};
-    for (int i = 0; i < weightEntries.length; i++) {
+    for (int i = 0; i < widget.weightEntries.length; i++) {
       entryToRunningAverage[i] = runningAverages[i];
     }
 
@@ -43,7 +75,7 @@ class WeightEntryTable extends StatelessWidget {
           children: [
            
             ...visibleEntries.map((entry) {
-              final entryIndex = weightEntries.indexOf(entry);
+              final entryIndex = widget.weightEntries.indexOf(entry);
               final runningAvg = entryToRunningAverage[entryIndex] ?? 0.0;
               
               return Container(
@@ -55,7 +87,7 @@ class WeightEntryTable extends StatelessWidget {
                   children: [
                     // Date row
                     Text(
-                      DateFormat('dd/MM/yy').format(entry.date),
+                      DateFormat(_dateFormat).format(entry.date),
                       style: TextStyle(
                         fontSize: 12,
                         color: Theme.of(context).colorScheme.onSecondary,
@@ -74,7 +106,7 @@ class WeightEntryTable extends StatelessWidget {
                         mainAxisSize: MainAxisSize.max,
                         children: [
                             Text(
-                              '${entry.weight.toStringAsFixed(1)} kg',
+                              '${entry.weight.toStringAsFixed(1)} ${_settingsService.getWeightUnitDisplay(_weightUnit)}',
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w600,
@@ -96,7 +128,7 @@ class WeightEntryTable extends StatelessWidget {
                                     ),
                                   ),
                                   TextSpan(
-                                    text: '${runningAvg.toStringAsFixed(1)} kg',
+                                    text: '${runningAvg.toStringAsFixed(1)} ${_settingsService.getWeightUnitDisplay(_weightUnit)}',
                                     style: TextStyle(
                                       fontSize: 18,
                                       color: Theme.of(context).colorScheme.tertiary,
@@ -114,7 +146,7 @@ class WeightEntryTable extends StatelessWidget {
                                 iconSize: 22,
                                 icon: const Icon(Icons.edit),
                                 color: Theme.of(context).colorScheme.onSecondary,
-                                onPressed: () => onEditEntry(entry),
+                                    onPressed: () => widget.onEditEntry(entry),
                                 padding: EdgeInsets.zero,
                                 style: ButtonStyle(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                                 visualDensity: VisualDensity(horizontal: -2.0, vertical: -4.0),
@@ -127,7 +159,7 @@ class WeightEntryTable extends StatelessWidget {
                                   icon: const Icon(Icons.delete),
                                   color: Theme.of(context).colorScheme.onSecondary,
                                   style: ButtonStyle(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                                  onPressed: () => onDeleteEntry(entry),
+                                  onPressed: () => widget.onDeleteEntry(entry),
                                   padding: EdgeInsets.zero,
                                   // constraints: const BoxConstraints(),
                                   // constraints: const BoxConstraints(minWidth: 0, minHeight: 0, maxHeight: 12),
@@ -146,15 +178,15 @@ class WeightEntryTable extends StatelessWidget {
               );
             }),
             // Load More button
-            if (hasMoreEntries && onLoadMore != null) ...[
+            if (widget.hasMoreEntries && widget.onLoadMore != null) ...[
               const Divider(),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Center(
                   child: ElevatedButton.icon(
-                    onPressed: onLoadMore,
+                    onPressed: widget.onLoadMore,
                     icon: const Icon(Icons.expand_more),
-                    label: Text('Load More (${weightEntries.length - visibleEntriesCount} remaining)'),
+                    label: Text('Load More (${widget.weightEntries.length - widget.visibleEntriesCount} remaining)'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Theme.of(context).colorScheme.primary,
                       foregroundColor: Colors.white,

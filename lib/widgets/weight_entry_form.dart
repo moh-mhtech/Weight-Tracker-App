@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/weight_entry.dart';
 import '../database/database_helper.dart';
+import '../services/settings_service.dart';
 
 class WeightEntryForm extends StatefulWidget {
   final Function()? onWeightAdded;
@@ -17,11 +18,36 @@ class _WeightEntryFormState extends State<WeightEntryForm> {
   final _weightController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   final DatabaseHelper _dbHelper = DatabaseHelper();
+  final SettingsService _settingsService = SettingsService();
+  String _weightUnit = 'kg';
+  String _dateFormat = 'dd/MM/yyyy';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh settings when returning from settings
+    _loadSettings();
+  }
 
   @override
   void dispose() {
     _weightController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadSettings() async {
+    final unit = await _settingsService.getWeightUnit();
+    final format = await _settingsService.getDateFormat();
+    setState(() {
+      _weightUnit = unit;
+      _dateFormat = format;
+    });
   }
 
   Future<void> _selectDate() async {
@@ -81,10 +107,16 @@ class _WeightEntryFormState extends State<WeightEntryForm> {
                     child: TextFormField(
                       controller: _weightController,
                       keyboardType: TextInputType.numberWithOptions(decimal: true),
-                      style: TextStyle(color: Theme.of(context).colorScheme.tertiary),
-                      decoration: const InputDecoration(
-                        labelText: 'Weight (kg)',
-                        border: OutlineInputBorder(),
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (value) {
+                        if (_formKey.currentState!.validate()) {
+                          _saveWeight();
+                        }
+                      },
+                      // style: TextStyle(color: Theme.of(context).colorScheme.tertiary),
+                      decoration: InputDecoration(
+                        labelText: _settingsService.getWeightUnitLabel(_weightUnit),
+                        border: const OutlineInputBorder(),
                         // prefixIcon: Icon(Icons.monitor_weight),
                       ),
                       validator: (value) {
@@ -110,7 +142,7 @@ class _WeightEntryFormState extends State<WeightEntryForm> {
                           // prefixIcon: Icon(Icons.calendar_today),
                         ),
                         child: Text(
-                          DateFormat('yyyy-MM-dd').format(_selectedDate),
+                          DateFormat(_dateFormat).format(_selectedDate),
                           // style: const TextStyle(fontSize: 16),
                         ),
                       ),

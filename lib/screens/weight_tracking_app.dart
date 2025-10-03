@@ -8,6 +8,7 @@ import '../widgets/weight_chart.dart';
 import '../widgets/app_logo.dart';
 import '../widgets/weight_entry_table.dart';
 import '../services/sample_data_service.dart';
+import '../services/settings_service.dart';
 import 'settings_screen.dart';
 
 class WeightTrackingApp extends StatefulWidget {
@@ -19,14 +20,32 @@ class WeightTrackingApp extends StatefulWidget {
 
 class _WeightTrackingAppState extends State<WeightTrackingApp> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
+  final SettingsService _settingsService = SettingsService();
   List<WeightEntry> _weightEntries = [];
   bool _isLoading = true;
   int _visibleEntriesCount = 15;
+  String _weightUnit = 'kg';
+  String _dateFormat = 'dd/MM/yyyy';
 
   @override
   void initState() {
     super.initState();
     _loadWeightEntries();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final unit = await _settingsService.getWeightUnit();
+    final format = await _settingsService.getDateFormat();
+    setState(() {
+      _weightUnit = unit;
+      _dateFormat = format;
+    });
   }
 
   void _loadMoreEntries() {
@@ -35,13 +54,15 @@ class _WeightTrackingAppState extends State<WeightTrackingApp> {
     });
   }
 
-  void _navigateToSettings() {
-    Navigator.push(
+  void _navigateToSettings() async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => const SettingsScreen(),
       ),
     );
+    // Refresh settings when returning from settings
+    _loadSettings();
   }
 
   Future<void> _loadWeightEntries() async {
@@ -156,10 +177,10 @@ class _WeightTrackingAppState extends State<WeightTrackingApp> {
               TextFormField(
                 controller: weightController,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  labelText: 'Weight (kg)',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.monitor_weight),
+                decoration: InputDecoration(
+                  labelText: _settingsService.getWeightUnitLabel(_weightUnit),
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.monitor_weight),
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
@@ -254,7 +275,7 @@ class _WeightTrackingAppState extends State<WeightTrackingApp> {
       builder: (context) => AlertDialog(
         title: const Text('Delete Weight Entry'),
         content: Text(
-          'Are you sure you want to delete the weight entry of ${entry.weight.toStringAsFixed(1)} kg from ${entry.date.day}/${entry.date.month}/${entry.date.year}?',
+          'Are you sure you want to delete the weight entry of ${entry.weight.toStringAsFixed(1)} ${_settingsService.getWeightUnitDisplay(_weightUnit)} from ${DateFormat(_dateFormat).format(entry.date)}?',
         ),
         actions: [
           TextButton(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../models/weight_entry.dart';
+import '../services/settings_service.dart';
 
 class WeightChart extends StatefulWidget {
   final List<WeightEntry> weightEntries;
@@ -14,6 +15,32 @@ class WeightChart extends StatefulWidget {
 
 class _WeightChartState extends State<WeightChart> {
   static const int _visibleDays = 7; // Number of days to show at once
+  final SettingsService _settingsService = SettingsService();
+  int _runningAverageDays = 5;
+  String _weightUnit = 'kg';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final days = await _settingsService.getRunningAverageDays();
+    final unit = await _settingsService.getWeightUnit();
+    if (mounted) {
+      setState(() {
+        _runningAverageDays = days;
+        _weightUnit = unit;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -97,8 +124,22 @@ class _WeightChartState extends State<WeightChart> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Current Average Weight Label
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                '$_runningAverageDays-day Average: ${_getLatestAverageWeight(periodEntries).toStringAsFixed(1)} $_weightUnit',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.tertiary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
             SizedBox(
-              height: 240,
+              height: 220,
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   // Calculate responsive day width based on available space
@@ -113,7 +154,7 @@ class _WeightChartState extends State<WeightChart> {
                       LineChartData(
                         gridData: FlGridData(
                           show: true,
-                          horizontalInterval: 1,
+                          horizontalInterval: 0.5,
                           verticalInterval: 1,
                         ),
                         titlesData: FlTitlesData(
@@ -122,8 +163,20 @@ class _WeightChartState extends State<WeightChart> {
                               showTitles: true,
                               reservedSize: 40,
                               getTitlesWidget: (value, meta) {
-                                return Text(
-                                  '${value.toStringAsFixed(1)}',
+                                // Only show labels at 0.5 intervals
+                                if (value % 0.5 != 0) {
+                                  return const SizedBox.shrink();
+                                }
+                                
+                                // Hide labels for min and max values
+                                final minWeight = _getMinWeight(periodEntries) - 0.2;
+                                final maxWeight = _getMaxWeight(periodEntries) + 0.2;
+                                
+                                if (value == minWeight || value == maxWeight) {
+                                  return const SizedBox.shrink(); // Hide min/max labels
+                                }
+                                
+                                return Text(value.toStringAsFixed(1),
                                   style: const TextStyle(fontSize: 10),
                                 );
                               },
@@ -156,8 +209,8 @@ class _WeightChartState extends State<WeightChart> {
                         borderData: FlBorderData(show: true),
                         minX: 0,
                         maxX: (_visibleDays - 1).toDouble(),
-                        minY: _getMinWeight(periodEntries) - 0.5,
-                        maxY: _getMaxWeight(periodEntries) + 0.5,
+                        minY: _getMinWeight(periodEntries) - 0.2,
+                        maxY: _getMaxWeight(periodEntries) + 0.2,
                         lineBarsData: [
                           // Running average line
                           LineChartBarData(
@@ -224,7 +277,7 @@ class _WeightChartState extends State<WeightChart> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Text('5-day Average'),
+                Text('$_runningAverageDays-day Average'),
               ],
             ),
           ],
@@ -268,8 +321,8 @@ class _WeightChartState extends State<WeightChart> {
   }
 
   double _calculateRunningAverageForEntry(List<WeightEntry> entries, DateTime targetDate) {
-    // Get all entries within 5 days before the target date (including the target date)
-    final startRangeDate = targetDate.subtract(const Duration(days: 4));
+    // Get all entries within the configured days before the target date (including the target date)
+    final startRangeDate = targetDate.subtract(Duration(days: _runningAverageDays - 1));
     
     final relevantEntries = entries.where((entry) {
       final entryDate = DateTime(entry.date.year, entry.date.month, entry.date.day);
@@ -293,5 +346,15 @@ class _WeightChartState extends State<WeightChart> {
   double _getMaxWeight(List<WeightEntry> entries) {
     if (entries.isEmpty) return 100;
     return entries.map((e) => e.weight).reduce((a, b) => a > b ? a : b);
+  }
+
+  double _getLatestAverageWeight(List<WeightEntry> entries) {
+    if (entries.isEmpty) return 0.0;
+    
+    // Get the latest entry date
+    final latestDate = entries.map((e) => e.date).reduce((a, b) => a.isAfter(b) ? a : b);
+    
+    // Calculate the running average for the latest date
+    return _calculateRunningAverageForEntry(entries, latestDate);
   }
 }
