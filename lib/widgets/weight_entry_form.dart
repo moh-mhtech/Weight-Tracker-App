@@ -84,6 +84,7 @@ class _WeightEntryFormState extends State<WeightEntryForm> {
                       decoration: const InputDecoration(
                         labelText: 'Weight (kg)',
                         border: OutlineInputBorder(),
+                        // prefixIcon: Icon(Icons.monitor_weight),
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
@@ -105,6 +106,7 @@ class _WeightEntryFormState extends State<WeightEntryForm> {
                         decoration: const InputDecoration(
                           labelText: 'Date',
                           border: OutlineInputBorder(),
+                          // prefixIcon: Icon(Icons.calendar_today),
                         ),
                         child: Text(
                           DateFormat('yyyy-MM-dd').format(_selectedDate),

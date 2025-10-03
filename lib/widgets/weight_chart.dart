@@ -98,7 +98,7 @@ class _WeightChartState extends State<WeightChart> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(
-              height: 300,
+              height: 240,
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   // Calculate responsive day width based on available space
@@ -171,7 +171,7 @@ class _WeightChartState extends State<WeightChart> {
                               getDotPainter: (spot, percent, barData, index) {
                                 return FlDotCirclePainter(
                                   radius: 4,
-                                  color: Colors.grey, // Grey for measurement points
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                                   strokeWidth: 2,
                                   strokeColor: Colors.white,
                                 );
@@ -184,7 +184,7 @@ class _WeightChartState extends State<WeightChart> {
                           LineChartBarData(
                             spots: _calculateRunningAverageSpots(periodEntries, startDate),
                             isCurved: true,
-                            color: const Color(0xFF608162), // Secondary green for moving average
+                            color: Theme.of(context).colorScheme.primary, // Secondary green for moving average
                             barWidth: 2,
                             isStrokeCapRound: true,
                             dotData: const FlDotData(show: false),
@@ -207,8 +207,8 @@ class _WeightChartState extends State<WeightChart> {
                 Container(
                   width: 12,
                   height: 12,
-                  decoration: const BoxDecoration(
-                    color: Colors.grey, // Grey for measurements
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -218,8 +218,8 @@ class _WeightChartState extends State<WeightChart> {
                 Container(
                   width: 12,
                   height: 12,
-                  decoration: const BoxDecoration(
-                    color: const Color(0xFF608162), // Secondary green
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary,
                     shape: BoxShape.circle,
                   ),
                 ),

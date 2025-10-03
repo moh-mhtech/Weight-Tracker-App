@@ -47,44 +47,51 @@ class WeightEntryTable extends StatelessWidget {
               final runningAvg = entryToRunningAverage[entryIndex] ?? 0.0;
               
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
+                // decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Date row
                     Text(
                       DateFormat('dd/MM/yy').format(entry.date),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey,
+                        // color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w500,
+                        
                       ),
                     ),
                     
                     // Measurement, average, and actions row
-                    Padding(
+                    Container(
+                      // decoration: BoxDecoration(color: Colors.red.withAlpha(50)),
                       padding: const EdgeInsets.only(left: 8.0),
+                      // padding: EdgeInsets.zero,
                       child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        mainAxisSize: MainAxisSize.max,
                         children: [
-                          Expanded(
-                            flex: 2,
-                            child: Text(
+                            Text(
                               '${entry.weight.toStringAsFixed(1)} kg',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w600,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
+                              overflow: TextOverflow.visible
                             ),
-                          ),
-                          Expanded(
-                            flex: 2,
-                            child: RichText(
+                          RichText(
+                              // decoration: BoxDecoration(color: Colors.red.withAlpha(50)),
+                              overflow: TextOverflow.visible,
                               text: TextSpan(
                                 children: [
                                   TextSpan(
                                     text: 'avg ',
                                     style: TextStyle(
-                                      fontSize: 16,
+                                      fontSize: 12,
                                       color: Theme.of(context).colorScheme.primary,
                                       fontWeight: FontWeight.w500,
                                     ),
@@ -100,25 +107,36 @@ class WeightEntryTable extends StatelessWidget {
                                 ],
                               ),
                             ),
-                          ),
                           Row(
-                            mainAxisSize: MainAxisSize.min,
+                            // mainAxisSize: MainAxisSize.min,
+                            // crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               IconButton(
-                                icon: const Icon(Icons.edit, color: Colors.grey, size: 22),
+                                iconSize: 22,
+                                icon: const Icon(Icons.edit),
+                                // color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                color: Colors.grey,
                                 onPressed: () => onEditEntry(entry),
                                 padding: EdgeInsets.zero,
-                                // constraints: const BoxConstraints( minWidth: 28 ),
-                                constraints: BoxConstraints(),
-                              ),
-                              const SizedBox(width: 8),
+                                style: ButtonStyle(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                                visualDensity: VisualDensity(horizontal: -2.0, vertical: -4.0),
+                                // constraints: const BoxConstraints(),
+                                // visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
+                                  ),
+                              
                               IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.grey, size: 22),
-                                onPressed: () => onDeleteEntry(entry),
-                                padding: EdgeInsets.zero,
-                                // constraints: const BoxConstraints( minWidth: 28 ),
-                                constraints: BoxConstraints(),
-                              ),
+                                  iconSize: 22,
+                                  icon: const Icon(Icons.delete),
+                                  // color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  color: Colors.grey,
+                                  style: ButtonStyle(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                                  onPressed: () => onDeleteEntry(entry),
+                                  padding: EdgeInsets.zero,
+                                  // constraints: const BoxConstraints(),
+                                  // constraints: const BoxConstraints(minWidth: 0, minHeight: 0, maxHeight: 12),
+                                  visualDensity: VisualDensity(horizontal: -2.0, vertical: -4.0),
+                                ),
+                              
                             ],
                           ),
                         ],
