@@ -8,6 +8,7 @@ import '../widgets/weight_chart.dart';
 import '../widgets/app_logo.dart';
 import '../widgets/weight_entry_table.dart';
 import '../services/sample_data_service.dart';
+import 'settings_screen.dart';
 
 class WeightTrackingApp extends StatefulWidget {
   const WeightTrackingApp({super.key});
@@ -32,6 +33,15 @@ class _WeightTrackingAppState extends State<WeightTrackingApp> {
     setState(() {
       _visibleEntriesCount += 15;
     });
+  }
+
+  void _navigateToSettings() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const SettingsScreen(),
+      ),
+    );
   }
 
   Future<void> _loadWeightEntries() async {
@@ -78,6 +88,10 @@ class _WeightTrackingAppState extends State<WeightTrackingApp> {
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Theme.of(context).colorScheme.onPrimary,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () => _navigateToSettings(),
+          ),
           if (kDebugMode && _weightEntries.length >= 30) ...[
             Container(
               margin: const EdgeInsets.only(right: 8),

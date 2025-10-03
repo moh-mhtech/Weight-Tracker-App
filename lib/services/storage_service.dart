@@ -165,4 +165,11 @@ class StorageService {
       return 0;
     }
   }
+
+  Future<void> clearAllData() async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_weightEntriesKey);
+    }
+  }
 }

@@ -135,6 +135,21 @@ class DatabaseHelper {
     }
   }
 
+  Future<void> clearAllData() async {
+    if (kIsWeb) {
+      return await StorageService().clearAllData();
+    } else {
+      final db = await database;
+      await db.delete('weight_entries');
+    }
+  }
+
+  Future<void> importWeightEntries(List<WeightEntry> entries) async {
+    for (final entry in entries) {
+      await insertWeightEntry(entry);
+    }
+  }
+
   Future<void> close() async {
     if (!kIsWeb) { // Only close for non-web platforms
       final db = await database;
