@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/weight_entry.dart';
 import '../providers/settings_provider.dart';
+import '../services/average_calculation_service.dart';
 
 class WeightChart extends StatefulWidget {
   final List<WeightEntry> weightEntries;
@@ -15,8 +16,6 @@ class WeightChart extends StatefulWidget {
 }
 
 class _WeightChartState extends State<WeightChart> {
-  static const int _visibleDays = 7; // Number of days to show at once
-
   @override
   void initState() {
     super.initState();
@@ -43,61 +42,25 @@ class _WeightChartState extends State<WeightChart> {
         }
 
         // Sort entries by date
-        final sortedEntries = List<WeightEntry>.from(widget.weightEntries)
+        final allEntries = List<WeightEntry>.from(widget.weightEntries)
           ..sort((a, b) => a.date.compareTo(b.date));
 
         // Find the latest measurement date
-        final latestDate = sortedEntries.last.date;
+        final latestDate = allEntries.last.date;
         
         // Calculate the 7-day period ending at the latest measurement
         final endDate = DateTime(latestDate.year, latestDate.month, latestDate.day);
         final startDate = endDate.subtract(const Duration(days: 6));
-        
-        // Filter entries to the 7-day period
-        final periodEntries = sortedEntries.where((entry) {
-          final entryDate = DateTime(entry.date.year, entry.date.month, entry.date.day);
-          return entryDate.isAfter(startDate.subtract(const Duration(days: 1))) &&
-                 entryDate.isBefore(endDate.add(const Duration(days: 1)));
-        }).toList();
 
-        if (periodEntries.isEmpty) {
-          return const Card(
-            margin: EdgeInsets.all(16),
-            child: Padding(
-              padding: EdgeInsets.all(32),
-              child: Center(
-                child: Text(
-                  'No data available for the selected period.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16, color: Colors.grey),
-                ),
-              ),
-            ),
-          );
-        }
+        // Calculate running averages on all entries (already returns sorted)
+        final runningAverages = AverageCalculationService.calcDateAverages(
+          allEntries,
+          settingsProvider.runningAverageDays,
+        );
 
-        // Group entries by date for running average calculation
-        final Map<String, List<WeightEntry>> dailyGroups = {};
-        for (final entry in sortedEntries) {
-          final dateKey = '${entry.date.year}-${entry.date.month}-${entry.date.day}';
-          dailyGroups.putIfAbsent(dateKey, () => []).add(entry);
-        }
-
-        // Calculate daily averages for running average calculation
-        final List<WeightEntry> dailyAverages = [];
-        dailyGroups.forEach((dateKey, dayEntries) {
-          final sum = dayEntries.fold<double>(0, (sum, entry) => sum + entry.weight);
-          final average = sum / dayEntries.length;
-          dailyAverages.add(WeightEntry(
-            weight: average,
-            date: dayEntries.first.date,
-          ));
-        });
-
-        // Sort daily averages by date
-        dailyAverages.sort((a, b) => a.date.compareTo(b.date));
-
-        // No need to pre-calculate running averages - we'll calculate them per data point
+        // Get the latest running average for the label (from all data)
+        final latestDateNormalized = DateTime(allEntries.last.date.year, allEntries.last.date.month, allEntries.last.date.day);
+        final latestRunningAverage = runningAverages[latestDateNormalized] ?? 0.0;
 
         return Card(
       margin: const EdgeInsets.all(16),
@@ -111,7 +74,7 @@ class _WeightChartState extends State<WeightChart> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
-                '${settingsProvider.runningAverageDays}-day Average: ${_getLatestAverageWeight(periodEntries, settingsProvider.runningAverageDays).toStringAsFixed(1)} ${settingsProvider.weightUnit}',
+                '${settingsProvider.runningAverageDays}-day Average: ${latestRunningAverage.toStringAsFixed(1)} ${settingsProvider.weightUnit}',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -151,8 +114,8 @@ class _WeightChartState extends State<WeightChart> {
                                 }
                                 
                                 // Hide labels for min and max values
-                                final minWeight = _getMinWeight(periodEntries) - 0.2;
-                                final maxWeight = _getMaxWeight(periodEntries) + 0.2;
+                                final minWeight = _getMinWeight(allEntries) - 0.2;
+                                final maxWeight = _getMaxWeight(allEntries) + 0.2;
                                 
                                 if (value == minWeight || value == maxWeight) {
                                   return const SizedBox.shrink(); // Hide min/max labels
@@ -168,20 +131,16 @@ class _WeightChartState extends State<WeightChart> {
                             sideTitles: SideTitles(
                               showTitles: true,
                               reservedSize: 40,
-                              interval: 1, // Show every day
+                              interval: 86400000, // 1 day in milliseconds
                               getTitlesWidget: (value, meta) {
-                                final dayIndex = value.toInt();
-                                if (dayIndex >= 0 && dayIndex < _visibleDays) {
-                                  final date = startDate.add(Duration(days: dayIndex));
-                                  return Transform.rotate(
-                                    angle: -0.8, // Rotate -0.5 radians (about -28 degrees)
-                                    child: Text(
-                                      DateFormat('dd MMM').format(date).toLowerCase(),
-                                      style: const TextStyle(fontSize: 10),
-                                    ),
-                                  );
-                                }
-                                return const Text('');
+                                final date = DateTime.fromMillisecondsSinceEpoch(value.toInt());
+                                return Transform.rotate(
+                                  angle: -0.8, // Rotate -0.8 radians (about -45 degrees)
+                                  child: Text(
+                                    DateFormat('dd MMM').format(date).toLowerCase(),
+                                    style: const TextStyle(fontSize: 10),
+                                  ),
+                                );
                               },
                             ),
                           ),
@@ -189,14 +148,17 @@ class _WeightChartState extends State<WeightChart> {
                           rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                         ),
                         borderData: FlBorderData(show: true),
-                        minX: 0,
-                        maxX: (_visibleDays - 1).toDouble(),
-                        minY: _getMinWeight(periodEntries) - 0.2,
-                        maxY: _getMaxWeight(periodEntries) + 0.2,
+                        minX: startDate.millisecondsSinceEpoch.toDouble(),
+                        maxX: endDate.millisecondsSinceEpoch.toDouble(),
+                        minY: _getMinWeight(allEntries) - 0.2,
+                        maxY: _getMaxWeight(allEntries) + 0.2,
                         lineBarsData: [
                           // Running average line
                           LineChartBarData(
-                            spots: _calculateRunningAverageSpots(periodEntries, startDate, settingsProvider.runningAverageDays),
+                            spots: runningAverages.entries
+                                .where((entry) => entry.value > 0)
+                                .map((entry) => FlSpot(entry.key.millisecondsSinceEpoch.toDouble(), entry.value))
+                                .toList(),
                             isCurved: true,
                             color: Theme.of(context).colorScheme.tertiary, // Tertiary orange for moving average
                             barWidth: 2,
@@ -206,7 +168,7 @@ class _WeightChartState extends State<WeightChart> {
                           ),
                           // Individual measurements as dots (no lines, no tooltips)
                           LineChartBarData(
-                            spots: _calculateMeasurementSpots(periodEntries, startDate),
+                            spots: allEntries.map((entry) => FlSpot(entry.date.millisecondsSinceEpoch.toDouble(), entry.weight)).toList(),
                             isCurved: false,
                             color: Colors.transparent, // Make line transparent
                             barWidth: 0, // No line width
@@ -270,58 +232,6 @@ class _WeightChartState extends State<WeightChart> {
     );
   }
 
-  List<FlSpot> _calculateMeasurementSpots(List<WeightEntry> entries, DateTime startDate) {
-    final spots = <FlSpot>[];
-    
-    for (final entry in entries) {
-      final entryDate = DateTime(entry.date.year, entry.date.month, entry.date.day);
-      final daysFromStart = entryDate.difference(startDate).inDays;
-      
-      if (daysFromStart >= 0 && daysFromStart < _visibleDays) {
-        spots.add(FlSpot(daysFromStart.toDouble(), entry.weight));
-      }
-    }
-    
-    return spots;
-  }
-
-  List<FlSpot> _calculateRunningAverageSpots(List<WeightEntry> periodEntries, DateTime startDate, int runningAverageDays) {
-    final spots = <FlSpot>[];
-    
-    // Calculate running average for each actual data point
-    for (int i = 0; i < periodEntries.length; i++) {
-      final entry = periodEntries[i];
-      final entryDate = DateTime(entry.date.year, entry.date.month, entry.date.day);
-      
-      // Calculate running average for this specific entry
-      final runningAvg = _calculateRunningAverageForEntry(periodEntries, entryDate, runningAverageDays);
-      
-      // Calculate X position based on days from start date
-      final daysFromStart = entryDate.difference(startDate).inDays;
-      spots.add(FlSpot(daysFromStart.toDouble(), runningAvg));
-    }
-    
-    return spots;
-  }
-
-  double _calculateRunningAverageForEntry(List<WeightEntry> entries, DateTime targetDate, int runningAverageDays) {
-    // Get all entries within the configured days before the target date (including the target date)
-    final startRangeDate = targetDate.subtract(Duration(days: runningAverageDays - 1));
-    
-    final relevantEntries = entries.where((entry) {
-      final entryDate = DateTime(entry.date.year, entry.date.month, entry.date.day);
-      return entryDate.isAfter(startRangeDate.subtract(const Duration(days: 1))) &&
-             entryDate.isBefore(targetDate.add(const Duration(days: 1)));
-    }).toList();
-    
-    if (relevantEntries.isEmpty) {
-      return 0.0;
-    }
-    
-    final sum = relevantEntries.fold<double>(0, (sum, entry) => sum + entry.weight);
-    return sum / relevantEntries.length;
-  }
-
   double _getMinWeight(List<WeightEntry> entries) {
     if (entries.isEmpty) return 0;
     return entries.map((e) => e.weight).reduce((a, b) => a < b ? a : b);
@@ -330,15 +240,5 @@ class _WeightChartState extends State<WeightChart> {
   double _getMaxWeight(List<WeightEntry> entries) {
     if (entries.isEmpty) return 100;
     return entries.map((e) => e.weight).reduce((a, b) => a > b ? a : b);
-  }
-
-  double _getLatestAverageWeight(List<WeightEntry> entries, int runningAverageDays) {
-    if (entries.isEmpty) return 0.0;
-    
-    // Get the latest entry date
-    final latestDate = entries.map((e) => e.date).reduce((a, b) => a.isAfter(b) ? a : b);
-    
-    // Calculate the running average for the latest date
-    return _calculateRunningAverageForEntry(entries, latestDate, runningAverageDays);
   }
 }

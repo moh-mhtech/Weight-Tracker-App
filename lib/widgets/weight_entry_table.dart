@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/weight_entry.dart';
 import '../providers/settings_provider.dart';
+import '../services/average_calculation_service.dart';
 
 class WeightEntryTable extends StatefulWidget {
   final List<WeightEntry> weightEntries;
@@ -40,14 +41,11 @@ class _WeightEntryTableState extends State<WeightEntryTable> {
         // Show only the visible entries (newest first)
         final visibleEntries = widget.weightEntries.reversed.take(widget.visibleEntriesCount).toList();
 
-    // Calculate running averages for all entries
-    final runningAverages = _calculateRunningAverages(widget.weightEntries);
-    
-    // Create a map of entry index to running average
-    final Map<int, double> entryToRunningAverage = {};
-    for (int i = 0; i < widget.weightEntries.length; i++) {
-      entryToRunningAverage[i] = runningAverages[i];
-    }
+        // Calculate running averages for entry dates
+        final dateToRunningAverage = AverageCalculationService.calcDateAverages(
+          widget.weightEntries,
+          settingsProvider.runningAverageDays,
+        );
 
     return Card(
       margin: const EdgeInsets.all(16),
@@ -58,8 +56,9 @@ class _WeightEntryTableState extends State<WeightEntryTable> {
           children: [
            
             ...visibleEntries.map((entry) {
-              final entryIndex = widget.weightEntries.indexOf(entry);
-              final runningAvg = entryToRunningAverage[entryIndex] ?? 0.0;
+              // Normalize the entry date to match the keys in dateToRunningAverage
+              final normalizedDate = DateTime(entry.date.year, entry.date.month, entry.date.day);
+              final runningAvg = dateToRunningAverage[normalizedDate] ?? 0.0;
               
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
@@ -184,50 +183,5 @@ class _WeightEntryTableState extends State<WeightEntryTable> {
     );
       },
     );
-  }
-
-  List<double> _calculateRunningAverages(List<WeightEntry> entries) {
-    final averages = <double>[];
-    
-    // Group entries by date and calculate daily averages
-    final Map<String, List<WeightEntry>> dailyGroups = {};
-    for (final entry in entries) {
-      final dateKey = '${entry.date.year}-${entry.date.month}-${entry.date.day}';
-      dailyGroups.putIfAbsent(dateKey, () => []).add(entry);
-    }
-    
-    // Calculate daily averages
-    final List<WeightEntry> dailyAverages = [];
-    dailyGroups.forEach((dateKey, dayEntries) {
-      final sum = dayEntries.fold<double>(0, (sum, entry) => sum + entry.weight);
-      final average = sum / dayEntries.length;
-      dailyAverages.add(WeightEntry(
-        weight: average,
-        date: dayEntries.first.date,
-      ));
-    });
-    
-    // Sort by date
-    dailyAverages.sort((a, b) => a.date.compareTo(b.date));
-    
-    // Calculate running averages using daily averages
-    for (int i = 0; i < entries.length; i++) {
-      final currentDate = entries[i].date;
-      final startDate = currentDate.subtract(const Duration(days: 4));
-      
-      final relevantDailyAverages = dailyAverages.where((entry) {
-        return entry.date.isAfter(startDate.subtract(const Duration(days: 1))) &&
-               entry.date.isBefore(currentDate.add(const Duration(days: 1)));
-      }).toList();
-      
-      if (relevantDailyAverages.isNotEmpty) {
-        final sum = relevantDailyAverages.fold<double>(0, (sum, entry) => sum + entry.weight);
-        averages.add(sum / relevantDailyAverages.length);
-      } else {
-        averages.add(entries[i].weight);
-      }
-    }
-    
-    return averages;
   }
 }
