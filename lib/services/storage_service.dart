@@ -13,37 +13,29 @@ class StorageService {
   Future<List<WeightEntry>> getAllWeightEntries() async {
     if (kIsWeb) {
       return await _getWeightEntriesFromWeb();
-    } else {
-      // For mobile platforms, this will be handled by DatabaseHelper
-      return [];
     }
+    return [];
   }
 
   Future<int> insertWeightEntry(WeightEntry entry) async {
     if (kIsWeb) {
       return await _insertWeightEntryToWeb(entry);
-    } else {
-      // For mobile platforms, this will be handled by DatabaseHelper
-      return 0;
     }
+    return 0;
   }
 
   Future<int> updateWeightEntry(WeightEntry entry) async {
     if (kIsWeb) {
       return await _updateWeightEntryInWeb(entry);
-    } else {
-      // For mobile platforms, this will be handled by DatabaseHelper
-      return 0;
     }
+    return 0;
   }
 
   Future<int> deleteWeightEntry(int id) async {
     if (kIsWeb) {
       return await _deleteWeightEntryFromWeb(id);
-    } else {
-      // For mobile platforms, this will be handled by DatabaseHelper
-      return 0;
     }
+    return 0;
   }
 
   Future<List<WeightEntry>> getWeightEntriesForDateRange(
@@ -52,19 +44,15 @@ class StorageService {
   ) async {
     if (kIsWeb) {
       return await _getWeightEntriesForDateRangeFromWeb(startDate, endDate);
-    } else {
-      // For mobile platforms, this will be handled by DatabaseHelper
-      return [];
     }
+    return [];
   }
 
   Future<List<WeightEntry>> getLastNWeightEntries(int count) async {
     if (kIsWeb) {
       return await _getLastNWeightEntriesFromWeb(count);
-    } else {
-      // For mobile platforms, this will be handled by DatabaseHelper
-      return [];
     }
+    return [];
   }
 
   Future<List<WeightEntry>> _getWeightEntriesFromWeb() async {

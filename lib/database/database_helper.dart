@@ -1,4 +1,3 @@
-import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
 import 'package:flutter/foundation.dart';
@@ -54,19 +53,29 @@ class DatabaseHelper {
     }
   }
 
-  Future<List<WeightEntry>> getAllWeightEntries() async {
+  Future<List<WeightEntry>> _queryWeightEntries({
+    String? where,
+    List<dynamic>? whereArgs,
+    String? orderBy,
+    int? limit,
+  }) async {
     if (kIsWeb) {
       return await StorageService().getAllWeightEntries();
     } else {
       final db = await database;
       final List<Map<String, dynamic>> maps = await db.query(
         'weight_entries',
-        orderBy: 'date ASC',
+        where: where,
+        whereArgs: whereArgs,
+        orderBy: orderBy,
+        limit: limit,
       );
-      return List.generate(maps.length, (i) {
-        return WeightEntry.fromMap(maps[i]);
-      });
+      return List.generate(maps.length, (i) => WeightEntry.fromMap(maps[i]));
     }
+  }
+
+  Future<List<WeightEntry>> getAllWeightEntries() async {
+    return await _queryWeightEntries(orderBy: 'date ASC');
   }
 
   Future<List<WeightEntry>> getWeightEntriesForDateRange(
@@ -76,9 +85,7 @@ class DatabaseHelper {
     if (kIsWeb) {
       return await StorageService().getWeightEntriesForDateRange(startDate, endDate);
     } else {
-      final db = await database;
-      final List<Map<String, dynamic>> maps = await db.query(
-        'weight_entries',
+      return await _queryWeightEntries(
         where: 'date >= ? AND date <= ?',
         whereArgs: [
           startDate.millisecondsSinceEpoch,
@@ -86,9 +93,6 @@ class DatabaseHelper {
         ],
         orderBy: 'date ASC',
       );
-      return List.generate(maps.length, (i) {
-        return WeightEntry.fromMap(maps[i]);
-      });
     }
   }
 
@@ -96,15 +100,11 @@ class DatabaseHelper {
     if (kIsWeb) {
       return await StorageService().getLastNWeightEntries(count);
     } else {
-      final db = await database;
-      final List<Map<String, dynamic>> maps = await db.query(
-        'weight_entries',
+      final entries = await _queryWeightEntries(
         orderBy: 'date DESC',
         limit: count,
       );
-      return List.generate(maps.length, (i) {
-        return WeightEntry.fromMap(maps[i]);
-      }).reversed.toList();
+      return entries.reversed.toList();
     }
   }
 

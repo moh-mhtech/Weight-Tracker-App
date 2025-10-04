@@ -6,20 +6,19 @@ import '../models/weight_entry.dart';
 import '../database/database_helper.dart';
 import '../widgets/weight_entry_form.dart';
 import '../widgets/weight_chart.dart';
-import '../widgets/app_logo.dart';
 import '../widgets/weight_entry_table.dart';
 import '../services/sample_data_service.dart';
 import '../providers/settings_provider.dart';
 import 'settings_screen.dart';
 
-class WeightTrackingApp extends StatefulWidget {
-  const WeightTrackingApp({super.key});
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
 
   @override
-  State<WeightTrackingApp> createState() => _WeightTrackingAppState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _WeightTrackingAppState extends State<WeightTrackingApp> {
+class _HomeScreenState extends State<HomeScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
   List<WeightEntry> _weightEntries = [];
   bool _isLoading = true;
@@ -81,9 +80,13 @@ class _WeightTrackingAppState extends State<WeightTrackingApp> {
             title: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                AppLogo(
-                  size: 32,
-                  color: Theme.of(context).colorScheme.onPrimary,
+                SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: Image.asset(
+                    'assets/dial dark.png',
+                    fit: BoxFit.contain,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 const Text('Weight Graph'),
@@ -92,10 +95,6 @@ class _WeightTrackingAppState extends State<WeightTrackingApp> {
             backgroundColor: Theme.of(context).colorScheme.primary,
             foregroundColor: Theme.of(context).colorScheme.onPrimary,
             actions: [
-              IconButton(
-                icon: const Icon(Icons.settings),
-                onPressed: () => _navigateToSettings(),
-              ),
               if (kDebugMode && _weightEntries.length >= 30) ...[
                 Container(
                   margin: const EdgeInsets.only(right: 8),
@@ -105,7 +104,7 @@ class _WeightTrackingAppState extends State<WeightTrackingApp> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    'SAMPLE DATA',
+                    'SAMPLES',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
@@ -113,6 +112,10 @@ class _WeightTrackingAppState extends State<WeightTrackingApp> {
                     ),
                   ),
               ],
+              IconButton(
+                icon: const Icon(Icons.settings),
+                onPressed: () => _navigateToSettings(),
+              ),
             ],
           ),
           body: _isLoading

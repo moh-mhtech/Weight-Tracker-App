@@ -64,25 +64,11 @@ class SettingsProvider extends ChangeNotifier {
 
   // Helper method to get weight unit display text
   String getWeightUnitDisplay(String unit) {
-    switch (unit) {
-      case 'kg':
-        return 'kg';
-      case 'lbs':
-        return 'lbs';
-      default:
-        return 'kg';
-    }
+    return unit == 'lbs' ? 'lbs' : 'kg';
   }
 
   // Helper method to get weight unit label text
   String getWeightUnitLabel(String unit) {
-    switch (unit) {
-      case 'kg':
-        return 'Weight (kg)';
-      case 'lbs':
-        return 'Weight (lbs)';
-      default:
-        return 'Weight (kg)';
-    }
+    return unit == 'lbs' ? 'Weight (lbs)' : 'Weight (kg)';
   }
 }

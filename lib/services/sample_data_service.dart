@@ -7,7 +7,6 @@ class SampleDataService {
   static final Random _random = Random();
   
   static Future<void> addSampleDataIfNeeded() async {
-    // Only add sample data in debug mode
     if (!kDebugMode) return;
     
     final DatabaseHelper dbHelper = DatabaseHelper();
@@ -17,14 +16,10 @@ class SampleDataService {
     if (existingEntries.isNotEmpty) return;
     
     final sampleEntries = _generateSampleData();
-    
-    for (final entry in sampleEntries) {
-      await dbHelper.insertWeightEntry(entry);
-    }
+    await dbHelper.importWeightEntries(sampleEntries);
   }
   
   static Future<void> regenerateSampleData() async {
-    // Only regenerate sample data in debug mode
     if (!kDebugMode) return;
     
     final DatabaseHelper dbHelper = DatabaseHelper();
@@ -32,19 +27,12 @@ class SampleDataService {
     
     // Clear existing sample data (assuming all entries are sample data if we have 30+ entries)
     if (existingEntries.length >= 30) {
-      for (final entry in existingEntries) {
-        if (entry.id != null) {
-          await dbHelper.deleteWeightEntry(entry.id!);
-        }
-      }
+      await dbHelper.clearAllData();
     }
     
     // Add new sample data
     final sampleEntries = _generateSampleData();
-    
-    for (final entry in sampleEntries) {
-      await dbHelper.insertWeightEntry(entry);
-    }
+    await dbHelper.importWeightEntries(sampleEntries);
   }
   
   static List<WeightEntry> _generateSampleData() {
