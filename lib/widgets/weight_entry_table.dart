@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../models/weight_entry.dart';
-import '../services/settings_service.dart';
+import '../providers/settings_provider.dart';
 
 class WeightEntryTable extends StatefulWidget {
   final List<WeightEntry> weightEntries;
@@ -26,36 +27,18 @@ class WeightEntryTable extends StatefulWidget {
 }
 
 class _WeightEntryTableState extends State<WeightEntryTable> {
-  final SettingsService _settingsService = SettingsService();
-  String _weightUnit = 'kg';
-  String _dateFormat = 'dd/MM/yyyy';
 
   @override
   void initState() {
     super.initState();
-    _loadSettings();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Refresh settings when returning from settings
-    _loadSettings();
-  }
-
-  Future<void> _loadSettings() async {
-    final unit = await _settingsService.getWeightUnit();
-    final format = await _settingsService.getDateFormat();
-    setState(() {
-      _weightUnit = unit;
-      _dateFormat = format;
-    });
   }
 
   @override
   Widget build(BuildContext context) {
-    // Show only the visible entries (newest first)
-    final visibleEntries = widget.weightEntries.reversed.take(widget.visibleEntriesCount).toList();
+    return Consumer<SettingsProvider>(
+      builder: (context, settingsProvider, child) {
+        // Show only the visible entries (newest first)
+        final visibleEntries = widget.weightEntries.reversed.take(widget.visibleEntriesCount).toList();
 
     // Calculate running averages for all entries
     final runningAverages = _calculateRunningAverages(widget.weightEntries);
@@ -87,7 +70,7 @@ class _WeightEntryTableState extends State<WeightEntryTable> {
                   children: [
                     // Date row
                     Text(
-                      DateFormat(_dateFormat).format(entry.date),
+                      DateFormat(settingsProvider.dateFormat).format(entry.date),
                       style: TextStyle(
                         fontSize: 12,
                         color: Theme.of(context).colorScheme.onSecondary,
@@ -106,7 +89,7 @@ class _WeightEntryTableState extends State<WeightEntryTable> {
                         mainAxisSize: MainAxisSize.max,
                         children: [
                             Text(
-                              '${entry.weight.toStringAsFixed(1)} ${_settingsService.getWeightUnitDisplay(_weightUnit)}',
+                              '${entry.weight.toStringAsFixed(1)} ${settingsProvider.getWeightUnitDisplay(settingsProvider.weightUnit)}',
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w600,
@@ -128,7 +111,7 @@ class _WeightEntryTableState extends State<WeightEntryTable> {
                                     ),
                                   ),
                                   TextSpan(
-                                    text: '${runningAvg.toStringAsFixed(1)} ${_settingsService.getWeightUnitDisplay(_weightUnit)}',
+                                    text: '${runningAvg.toStringAsFixed(1)} ${settingsProvider.getWeightUnitDisplay(settingsProvider.weightUnit)}',
                                     style: TextStyle(
                                       fontSize: 18,
                                       color: Theme.of(context).colorScheme.tertiary,
@@ -198,6 +181,8 @@ class _WeightEntryTableState extends State<WeightEntryTable> {
           ],
         ),
       ),
+    );
+      },
     );
   }
 

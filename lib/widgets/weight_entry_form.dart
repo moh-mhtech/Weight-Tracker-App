@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../models/weight_entry.dart';
 import '../database/database_helper.dart';
-import '../services/settings_service.dart';
+import '../providers/settings_provider.dart';
 
 class WeightEntryForm extends StatefulWidget {
   final Function()? onWeightAdded;
@@ -18,36 +19,16 @@ class _WeightEntryFormState extends State<WeightEntryForm> {
   final _weightController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   final DatabaseHelper _dbHelper = DatabaseHelper();
-  final SettingsService _settingsService = SettingsService();
-  String _weightUnit = 'kg';
-  String _dateFormat = 'dd/MM/yyyy';
 
   @override
   void initState() {
     super.initState();
-    _loadSettings();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Refresh settings when returning from settings
-    _loadSettings();
   }
 
   @override
   void dispose() {
     _weightController.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadSettings() async {
-    final unit = await _settingsService.getWeightUnit();
-    final format = await _settingsService.getDateFormat();
-    setState(() {
-      _weightUnit = unit;
-      _dateFormat = format;
-    });
   }
 
   Future<void> _selectDate() async {
@@ -93,7 +74,9 @@ class _WeightEntryFormState extends State<WeightEntryForm> {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return Consumer<SettingsProvider>(
+      builder: (context, settingsProvider, child) {
+        return Card(
       margin: const EdgeInsets.all(16),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -115,7 +98,7 @@ class _WeightEntryFormState extends State<WeightEntryForm> {
                       },
                       // style: TextStyle(color: Theme.of(context).colorScheme.tertiary),
                       decoration: InputDecoration(
-                        labelText: _settingsService.getWeightUnitLabel(_weightUnit),
+                        labelText: settingsProvider.getWeightUnitLabel(settingsProvider.weightUnit),
                         border: const OutlineInputBorder(),
                         // prefixIcon: Icon(Icons.monitor_weight),
                       ),
@@ -142,7 +125,7 @@ class _WeightEntryFormState extends State<WeightEntryForm> {
                           // prefixIcon: Icon(Icons.calendar_today),
                         ),
                         child: Text(
-                          DateFormat(_dateFormat).format(_selectedDate),
+                          DateFormat(settingsProvider.dateFormat).format(_selectedDate),
                           // style: const TextStyle(fontSize: 16),
                         ),
                       ),
@@ -166,6 +149,8 @@ class _WeightEntryFormState extends State<WeightEntryForm> {
           ),
         ),
       ),
+    );
+      },
     );
   }
 }

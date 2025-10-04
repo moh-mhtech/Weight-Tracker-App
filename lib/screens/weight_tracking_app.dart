@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../models/weight_entry.dart';
 import '../database/database_helper.dart';
 import '../widgets/weight_entry_form.dart';
@@ -8,7 +9,7 @@ import '../widgets/weight_chart.dart';
 import '../widgets/app_logo.dart';
 import '../widgets/weight_entry_table.dart';
 import '../services/sample_data_service.dart';
-import '../services/settings_service.dart';
+import '../providers/settings_provider.dart';
 import 'settings_screen.dart';
 
 class WeightTrackingApp extends StatefulWidget {
@@ -20,32 +21,14 @@ class WeightTrackingApp extends StatefulWidget {
 
 class _WeightTrackingAppState extends State<WeightTrackingApp> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
-  final SettingsService _settingsService = SettingsService();
   List<WeightEntry> _weightEntries = [];
   bool _isLoading = true;
   int _visibleEntriesCount = 15;
-  String _weightUnit = 'kg';
-  String _dateFormat = 'dd/MM/yyyy';
 
   @override
   void initState() {
     super.initState();
     _loadWeightEntries();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _loadSettings();
-  }
-
-  Future<void> _loadSettings() async {
-    final unit = await _settingsService.getWeightUnit();
-    final format = await _settingsService.getDateFormat();
-    setState(() {
-      _weightUnit = unit;
-      _dateFormat = format;
-    });
   }
 
   void _loadMoreEntries() {
@@ -61,8 +44,6 @@ class _WeightTrackingAppState extends State<WeightTrackingApp> {
         builder: (context) => const SettingsScreen(),
       ),
     );
-    // Refresh settings when returning from settings
-    _loadSettings();
   }
 
   Future<void> _loadWeightEntries() async {
@@ -93,74 +74,79 @@ class _WeightTrackingAppState extends State<WeightTrackingApp> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppLogo(
-              size: 32,
-              color: Theme.of(context).colorScheme.onPrimary,
+    return Consumer<SettingsProvider>(
+      builder: (context, settingsProvider, child) {
+        return Scaffold(
+          appBar: AppBar(
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AppLogo(
+                  size: 32,
+                  color: Theme.of(context).colorScheme.onPrimary,
+                ),
+                const SizedBox(width: 12),
+                const Text('Weight Graph'),
+              ],
             ),
-            const SizedBox(width: 12),
-            const Text('Weight Graph'),
-          ],
-        ),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () => _navigateToSettings(),
+            backgroundColor: Theme.of(context).colorScheme.primary,
+            foregroundColor: Theme.of(context).colorScheme.onPrimary,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.settings),
+                onPressed: () => _navigateToSettings(),
+              ),
+              if (kDebugMode && _weightEntries.length >= 30) ...[
+                Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.tertiary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'SAMPLE DATA',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onTertiary),
+                    ),
+                  ),
+              ],
+            ],
           ),
-          if (kDebugMode && _weightEntries.length >= 30) ...[
-            Container(
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.tertiary,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                'SAMPLE DATA',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onTertiary),
+          body: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : SafeArea(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        WeightEntryForm(onWeightAdded: _loadWeightEntries),
+                        WeightChart(weightEntries: _weightEntries),
+                        if (_weightEntries.isNotEmpty) ...[
+                          WeightEntryTable(
+                            weightEntries: _weightEntries,
+                            visibleEntriesCount: _visibleEntriesCount,
+                            onEditEntry: _editWeightEntry,
+                            onDeleteEntry: _deleteWeightEntry,
+                            onLoadMore: _loadMoreEntries,
+                            hasMoreEntries: _weightEntries.length > _visibleEntriesCount,
+                          ),
+                          const SizedBox(height: 16), // Extra padding for system navigation
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-          ],
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SafeArea(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    WeightEntryForm(onWeightAdded: _loadWeightEntries),
-                    WeightChart(weightEntries: _weightEntries),
-                    if (_weightEntries.isNotEmpty) ...[
-                      WeightEntryTable(
-                        weightEntries: _weightEntries,
-                        visibleEntriesCount: _visibleEntriesCount,
-                        onEditEntry: _editWeightEntry,
-                        onDeleteEntry: _deleteWeightEntry,
-                        onLoadMore: _loadMoreEntries,
-                        hasMoreEntries: _weightEntries.length > _visibleEntriesCount,
-                      ),
-                      const SizedBox(height: 16), // Extra padding for system navigation
-                    ],
-                  ],
-                ),
-              ),
-            ),
+        );
+      },
     );
   }
 
 
   Future<void> _editWeightEntry(WeightEntry entry) async {
+    final settingsProvider = Provider.of<SettingsProvider>(context, listen: false);
     final TextEditingController weightController = TextEditingController(
       text: entry.weight.toStringAsFixed(1),
     );
@@ -178,7 +164,7 @@ class _WeightTrackingAppState extends State<WeightTrackingApp> {
                 controller: weightController,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(
-                  labelText: _settingsService.getWeightUnitLabel(_weightUnit),
+                  labelText: settingsProvider.getWeightUnitLabel(settingsProvider.weightUnit),
                   border: const OutlineInputBorder(),
                   prefixIcon: const Icon(Icons.monitor_weight),
                 ),
@@ -270,12 +256,13 @@ class _WeightTrackingAppState extends State<WeightTrackingApp> {
   }
 
   Future<void> _deleteWeightEntry(WeightEntry entry) async {
+    final settingsProvider = Provider.of<SettingsProvider>(context, listen: false);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Weight Entry'),
         content: Text(
-          'Are you sure you want to delete the weight entry of ${entry.weight.toStringAsFixed(1)} ${_settingsService.getWeightUnitDisplay(_weightUnit)} from ${DateFormat(_dateFormat).format(entry.date)}?',
+          'Are you sure you want to delete the weight entry of ${entry.weight.toStringAsFixed(1)} ${settingsProvider.getWeightUnitDisplay(settingsProvider.weightUnit)} from ${DateFormat(settingsProvider.dateFormat).format(entry.date)}?',
         ),
         actions: [
           TextButton(

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../database/database_helper.dart';
-import '../services/settings_service.dart';
+import '../providers/settings_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -12,19 +13,15 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
-  final SettingsService _settingsService = SettingsService();
   late TextEditingController _averagePeriodController;
-  
-  // Settings state
-  String _weightUnit = 'kg';
-  String _dateFormat = 'dd/MM/yyyy';
-  int _runningAverageDays = 5;
   
   @override
   void initState() {
     super.initState();
     _averagePeriodController = TextEditingController();
-    _loadSettings();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadSettings();
+    });
   }
 
   @override
@@ -34,16 +31,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadSettings() async {
-    final unit = await _settingsService.getWeightUnit();
-    final format = await _settingsService.getDateFormat();
-    final days = await _settingsService.getRunningAverageDays();
-    
-    setState(() {
-      _weightUnit = unit;
-      _dateFormat = format;
-      _runningAverageDays = days;
-    });
-    _averagePeriodController.text = _runningAverageDays.toString();
+    final settingsProvider = Provider.of<SettingsProvider>(context, listen: false);
+    _averagePeriodController.text = settingsProvider.runningAverageDays.toString();
   }
 
 
@@ -95,134 +84,129 @@ class _SettingsScreenState extends State<SettingsScreen> {
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Theme.of(context).colorScheme.onPrimary,
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Weight Unit Setting
-          Card(
-            child: ListTile(
-              title: const Text('Weight Unit'),
-              trailing: DropdownButton<String>(
-                value: _weightUnit,
-                onChanged: (String? newValue) async {
-                  if (newValue != null) {
-                    setState(() {
-                      _weightUnit = newValue;
-                    });
-                    await _settingsService.setWeightUnit(newValue);
-                  }
-                },
-                items: const [
-                  DropdownMenuItem(value: 'kg', child: Text('kg')),
-                  DropdownMenuItem(value: 'lbs', child: Text('lbs')),
-                ],
-              ),
-            ),
-          ),
-          
-          const SizedBox(height: 8),
-          
-          // Date Format Setting
-          Card(
-            child: ListTile(
-              title: const Text('Date Format'),
-              trailing: DropdownButton<String>(
-                value: _dateFormat,
-                onChanged: (String? newValue) async {
-                  if (newValue != null) {
-                    setState(() {
-                      _dateFormat = newValue;
-                    });
-                    await _settingsService.setDateFormat(newValue);
-                  }
-                },
-                items: const [
-                  DropdownMenuItem(value: 'dd/MM/yyyy', child: Text('dd/MM/yyyy')),
-                  DropdownMenuItem(value: 'MM/dd/yyyy', child: Text('MM/dd/yyyy')),
-                  DropdownMenuItem(value: 'yyyy-MM-dd', child: Text('yyyy-MM-dd')),
-                ],
-              ),
-            ),
-          ),
-          
-          const SizedBox(height: 8),
-          
-          // Running Average Days Setting
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Average Period',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+      body: Consumer<SettingsProvider>(
+        builder: (context, settingsProvider, child) {
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              // Weight Unit Setting
+              Card(
+                child: ListTile(
+                  title: const Text('Weight Unit'),
+                  trailing: DropdownButton<String>(
+                    value: settingsProvider.weightUnit,
+                    onChanged: (String? newValue) async {
+                      if (newValue != null) {
+                        await settingsProvider.setWeightUnit(newValue);
+                      }
+                    },
+                    items: const [
+                      DropdownMenuItem(value: 'kg', child: Text('kg')),
+                      DropdownMenuItem(value: 'lbs', child: Text('lbs')),
+                    ],
                   ),
-                  const SizedBox(width: 16),
-                  SizedBox(
-                    width: 70,
-                    child: TextField(
-                      textAlign: TextAlign.right,
-                      controller: _averagePeriodController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Days',
-                        border: OutlineInputBorder(),
+                ),
+              ),
+              
+              const SizedBox(height: 8),
+              
+              // Date Format Setting
+              Card(
+                child: ListTile(
+                  title: const Text('Date Format'),
+                  trailing: DropdownButton<String>(
+                    value: settingsProvider.dateFormat,
+                    onChanged: (String? newValue) async {
+                      if (newValue != null) {
+                        await settingsProvider.setDateFormat(newValue);
+                      }
+                    },
+                    items: const [
+                      DropdownMenuItem(value: 'dd/MM/yyyy', child: Text('dd/MM/yyyy')),
+                      DropdownMenuItem(value: 'MM/dd/yyyy', child: Text('MM/dd/yyyy')),
+                      DropdownMenuItem(value: 'yyyy-MM-dd', child: Text('yyyy-MM-dd')),
+                    ],
+                  ),
+                ),
+              ),
+              
+              const SizedBox(height: 8),
+              
+              // Running Average Days Setting
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Average Period',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                       ),
-                      onChanged: (value) async {
-                        final parsedValue = int.tryParse(value);
-                        if (parsedValue != null && parsedValue > 0) {
-                          setState(() {
-                            _runningAverageDays = parsedValue;
-                          });
-                          await _settingsService.setRunningAverageDays(parsedValue);
-                        }
-                      },
-                    ),
+                      const SizedBox(width: 16),
+                      SizedBox(
+                        width: 70,
+                        child: TextField(
+                          textAlign: TextAlign.right,
+                          controller: _averagePeriodController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Days',
+                            border: OutlineInputBorder(),
+                          ),
+                          onChanged: (value) async {
+                            final parsedValue = int.tryParse(value);
+                            if (parsedValue != null && parsedValue > 0) {
+                              await settingsProvider.setRunningAverageDays(parsedValue);
+                            }
+                          },
+                        ),
+                      ),
+                      
+                    ],
                   ),
-                  
-                ],
+                ),
               ),
-            ),
-          ),
-          
-          const SizedBox(height: 8),
-          
-          
-          // Clear All Data
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.delete_forever, color: Colors.red),
-              title: const Text('Clear All Data'),
-              // subtitle: const Text('Delete all weight entries'),
-              onTap: _clearAllData,
-            ),
-          ),
-          
-          // const SizedBox(height: 8),
-          
-          // // Export Data
-          // Card(
-          //   child: ListTile(
-          //     leading: const Icon(Icons.download),
-          //     title: const Text('Export Data'),
-          //     // subtitle: const Text('Copy data to clipboard as CSV'),
-          //     onTap: _exportData,
-          //   ),
-          // ),
-          
-          // const SizedBox(height: 8),
-          
-          // // Import Data
-          // Card(
-          //   child: ListTile(
-          //     leading: const Icon(Icons.upload),
-          //     title: const Text('Import Data'),
-          //     // subtitle: const Text('Import data from clipboard CSV'),
-          //     onTap: _importData,
-          //   ),
-          // ),
-        ],
+              
+              const SizedBox(height: 8),
+              
+              
+              // Clear All Data
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.delete_forever, color: Colors.red),
+                  title: const Text('Clear All Data'),
+                  // subtitle: const Text('Delete all weight entries'),
+                  onTap: _clearAllData,
+                ),
+              ),
+              
+              // const SizedBox(height: 8),
+              
+              // // Export Data
+              // Card(
+              //   child: ListTile(
+              //     leading: const Icon(Icons.download),
+              //     title: const Text('Export Data'),
+              //     // subtitle: const Text('Copy data to clipboard as CSV'),
+              //     onTap: _exportData,
+              //   ),
+              // ),
+              
+              // const SizedBox(height: 8),
+              
+              // // Import Data
+              // Card(
+              //   child: ListTile(
+              //     leading: const Icon(Icons.upload),
+              //     title: const Text('Import Data'),
+              //     // subtitle: const Text('Import data from clipboard CSV'),
+              //     onTap: _importData,
+              //   ),
+              // ),
+            ],
+          );
+        },
       ),
     );
   }
