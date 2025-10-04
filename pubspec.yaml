@@ -44,10 +44,10 @@ dependencies:
   shared_preferences: ^2.2.2
   
   # Charts for displaying weight graphs
-  fl_chart: ^0.66.0
+  fl_chart: ^1.0.0
   
   # Date utilities
-  intl: ^0.19.0
+  intl: ^0.20.2
   
   # State management
   provider: ^6.1.1
@@ -61,10 +61,10 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0
   
   # Generate app icons for different platforms
-  flutter_launcher_icons: ^0.13.1
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

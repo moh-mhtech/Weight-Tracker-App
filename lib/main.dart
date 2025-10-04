@@ -35,7 +35,7 @@ class WeightGraphApp extends StatelessWidget {
             surface: _creamColor,
             error: _orangeColor,
             onError: Colors.white,
-            inversePrimary: _primaryGreen,
+            inversePrimary: _creamColor,
           ),
           useMaterial3: true,
         ),
