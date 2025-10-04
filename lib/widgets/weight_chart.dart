@@ -137,6 +137,8 @@ class _WeightChartState extends State<WeightChart> {
       leftTitles: AxisTitles(
         sideTitles: SideTitles(
           showTitles: true,
+          maxIncluded: false,
+          minIncluded: false,
           reservedSize: 26,
           getTitlesWidget: (value, meta) => _buildLeftTitle(value),
         ),
@@ -157,18 +159,6 @@ class _WeightChartState extends State<WeightChart> {
   }
 
   Widget _buildLeftTitle(double value) {
-    // Only show labels at 0.5 intervals
-    if (value % 0.5 != 0) {
-      return const SizedBox.shrink();
-    }
-    
-    // Hide labels for min and max values
-    final (minWeight, maxWeight) = _getWeightRange(widget.weightEntries);
-    
-    if (value == minWeight || value == maxWeight) {
-      return const SizedBox.shrink();
-    }
-    
     return Text(
       value.toStringAsFixed(1),
       style: const TextStyle(fontSize: 10),
