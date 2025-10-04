@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import '../models/weight_entry.dart';
 import '../providers/settings_provider.dart';
 import '../services/average_calculation_service.dart';
-import 'chart_sample.dart';
 
 class WeightChart extends StatefulWidget {
   final List<WeightEntry> weightEntries;
@@ -17,9 +16,202 @@ class WeightChart extends StatefulWidget {
 }
 
 class _WeightChartState extends State<WeightChart> {
+  late TransformationController _transformationController;
+  
   @override
   void initState() {
     super.initState();
+    _transformationController = TransformationController();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Calculate zoom and translation to show last 7 days using timestamps
+    if (widget.weightEntries.length > 7) {
+      final entries = widget.weightEntries;
+      final last7Entries = entries.skip(entries.length - 7).toList();
+      
+      if (last7Entries.length >= 2) {
+        final firstTimestamp = last7Entries.first.date.millisecondsSinceEpoch;
+        final lastTimestamp = last7Entries.last.date.millisecondsSinceEpoch;
+        
+        // Calculate zoom to show approximately 7 days (fence post rule)
+        final zoomLevel = entries.length / 6.0;
+        
+        // Calculate translation to center on the last 7 days
+        final centerTimestamp = (firstTimestamp + lastTimestamp) / 2;
+        final chartCenter = (entries.first.date.millisecondsSinceEpoch + entries.last.date.millisecondsSinceEpoch) / 2;
+        final translationX = -(centerTimestamp - chartCenter) * 0.001; // Scale factor for translation
+        
+        _transformationController.value = Matrix4.diagonal3Values(zoomLevel, 1.0, 1.0) * 
+                                         Matrix4.translationValues(translationX, 0.0, 0.0);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _transformationController.dispose();
+    super.dispose();
+  }
+
+  List<FlSpot> get _dataPoints {
+    return widget.weightEntries.map((weightEntry) {
+      // Remove the time part by creating a new DateTime with only year, month, day
+      final dateOnly = DateTime(weightEntry.date.year, weightEntry.date.month, weightEntry.date.day);
+      final timestamp = dateOnly.millisecondsSinceEpoch.toDouble();
+      return FlSpot(timestamp, weightEntry.weight);
+    }).toList();
+  }
+
+  List<FlSpot> _getRunningAveragePoints(SettingsProvider settingsProvider) {
+    final runningAverages = AverageCalculationService.calcDateAverages(
+      widget.weightEntries,
+      settingsProvider.runningAverageDays,
+    );
+    return runningAverages.entries
+        .where((entry) => entry.value > 0)
+        .map((entry) {
+          final dateOnly = DateTime(entry.key.year, entry.key.month, entry.key.day);
+          final timestamp = dateOnly.millisecondsSinceEpoch.toDouble();
+          return FlSpot(timestamp, entry.value);
+        })
+        .toList();
+  }
+
+  FlTransformationConfig _getTransformationConfig() {
+    return FlTransformationConfig(
+      scaleAxis: FlScaleAxis.horizontal,
+      minScale: 1.0,
+      maxScale: 50.0,
+      panEnabled: true,
+      scaleEnabled: true,
+      transformationController: _transformationController,
+    );
+  }
+
+  FlGridData _getGridData() {
+    return FlGridData(
+      show: true,
+      horizontalInterval: 0.5,
+      verticalInterval: const Duration(days: 1).inMilliseconds.toDouble(),
+    );
+  }
+
+  List<LineChartBarData> _getLineBarsData(SettingsProvider settingsProvider) {
+    return [
+      // Weight measurement points
+      LineChartBarData(
+        spots: _dataPoints,
+        dotData: FlDotData(
+          show: true,
+          getDotPainter: (spot, percent, barData, index) {
+            return FlDotCirclePainter(
+              radius: 4,
+              color: Theme.of(context).colorScheme.primary,
+              strokeWidth: 2,
+              strokeColor: Colors.grey[100]!,
+            );
+          },
+        ),
+        color: Colors.transparent,
+        barWidth: 0,
+        belowBarData: BarAreaData(show: false),
+      ),
+      // Running average curve
+      LineChartBarData(
+        spots: _getRunningAveragePoints(settingsProvider),
+        isCurved: true,
+        color: Theme.of(context).colorScheme.tertiary,
+        barWidth: 2,
+        isStrokeCapRound: true,
+        dotData: const FlDotData(show: false),
+        belowBarData: BarAreaData(show: false),
+      ),
+    ];
+  }
+
+  FlTitlesData _getTitlesData() {
+    return FlTitlesData(
+      leftTitles: AxisTitles(
+        sideTitles: SideTitles(
+          showTitles: true,
+          reservedSize: 26,
+          getTitlesWidget: (value, meta) => _buildLeftTitle(value),
+        ),
+      ),
+      bottomTitles: AxisTitles(
+        sideTitles: SideTitles(
+          showTitles: true,
+          maxIncluded: false,
+          minIncluded: false,
+          reservedSize: 28,
+          interval: 86400000, // 1 day in milliseconds
+          getTitlesWidget: (value, meta) => _buildBottomTitle(value),
+        ),
+      ),
+      topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+      rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+    );
+  }
+
+  Widget _buildLeftTitle(double value) {
+    // Only show labels at 0.5 intervals
+    if (value % 0.5 != 0) {
+      return const SizedBox.shrink();
+    }
+    
+    // Hide labels for min and max values
+    final (minWeight, maxWeight) = _getWeightRange(widget.weightEntries);
+    
+    if (value == minWeight || value == maxWeight) {
+      return const SizedBox.shrink();
+    }
+    
+    return Text(
+      value.toStringAsFixed(1),
+      style: const TextStyle(fontSize: 10),
+    );
+  }
+
+  Widget _buildBottomTitle(double value) {
+    final date = DateTime.fromMillisecondsSinceEpoch(value.toInt());
+    return Transform.rotate(
+      angle: -0.8, // Rotate -0.8 radians (about -45 degrees)
+      child: Align(
+        alignment: Alignment.bottomLeft,
+        child: Text(
+          DateFormat('dd MMM').format(date).toLowerCase(),
+          style: const TextStyle(fontSize: 10),
+        ),
+      ),
+    );
+  }
+
+  LineTouchData _getLineTouchData() {
+    return LineTouchData(
+      enabled: true,
+      touchTooltipData: LineTouchTooltipData(
+        getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
+          return touchedBarSpots.map((barSpot) {
+            final isRunningAverage = barSpot.barIndex == 1;
+            return LineTooltipItem(
+              '${barSpot.y.toStringAsFixed(1)} kg',
+              TextStyle(
+                color: isRunningAverage 
+                  ? Theme.of(context).colorScheme.tertiary 
+                  : Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            );
+          }).toList();
+        },
+        getTooltipColor: (LineBarSpot barSpot) => Theme.of(context).colorScheme.inversePrimary,
+        tooltipBorderRadius: BorderRadius.circular(12), 
+        tooltipPadding: EdgeInsets.all(8.0),// Add rounded corners to the tooltip
+      ),
+    );
   }
 
   @override
@@ -27,31 +219,12 @@ class _WeightChartState extends State<WeightChart> {
     return Consumer<SettingsProvider>(
       builder: (context, settingsProvider, child) {
         if (widget.weightEntries.isEmpty) {
-          return Card(
-            margin: EdgeInsets.all(16),
-            child: Padding(
-              padding: EdgeInsets.all(32),
-              child: Center(
-                child: Text(
-                  'No weight data available.\nAdd some weight entries to see the chart.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16, color: Theme.of(context).colorScheme.onSecondary),
-                ),
-              ),
-            ),
-          );
+          return const _EmptyState();
         }
 
         // Sort entries by date
         final allEntries = List<WeightEntry>.from(widget.weightEntries)
           ..sort((a, b) => a.date.compareTo(b.date));
-
-        // Find the latest measurement date
-        final latestDate = allEntries.last.date;
-        
-        // Calculate the 7-day period ending at the latest measurement
-        final endDate = DateTime(latestDate.year, latestDate.month, latestDate.day);
-        final startDate = endDate.subtract(const Duration(days: 6));
 
         // Calculate running averages on all entries (already returns sorted)
         final runningAverages = AverageCalculationService.calcDateAverages(
@@ -73,7 +246,7 @@ class _WeightChartState extends State<WeightChart> {
             // Current Average Weight Label
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.only(bottom: 8),
               child: Text(
                 '${settingsProvider.runningAverageDays}-day Average: ${latestRunningAverage.toStringAsFixed(1)} ${settingsProvider.weightUnit}',
                 style: TextStyle(
@@ -84,149 +257,30 @@ class _WeightChartState extends State<WeightChart> {
                 textAlign: TextAlign.center,
               ),
             ),
-            LineChartSample12(weightEntries: widget.weightEntries),
-            
-            // SizedBox(
-            //   height: 220,
-            //   child: LayoutBuilder(
-            //     builder: (context, constraints) {
-            //       // Calculate responsive day width based on available space
-            //       final availableWidth = constraints.maxWidth; // Use full available width
-                  
-            //       return SingleChildScrollView(
-            //         scrollDirection: Axis.horizontal,
-            //         physics: const NeverScrollableScrollPhysics(), // Disable built-in scrolling
-            //         child: SizedBox(
-            //           width: availableWidth,
-            //           child: LineChart(
-            //           LineChartData(
-            //             gridData: FlGridData(
-            //               show: true,
-            //               horizontalInterval: 0.5,
-            //               verticalInterval: 1,
-            //             ),
-            //             titlesData: FlTitlesData(
-            //               leftTitles: AxisTitles(
-            //                 sideTitles: SideTitles(
-            //                   showTitles: true,
-            //                   reservedSize: 40,
-            //                   getTitlesWidget: (value, meta) {
-            //                     // Only show labels at 0.5 intervals
-            //                     if (value % 0.5 != 0) {
-            //                       return const SizedBox.shrink();
-            //                     }
-                                
-            //                     // Hide labels for min and max values
-            //                     final minWeight = _getMinWeight(allEntries) - 0.2;
-            //                     final maxWeight = _getMaxWeight(allEntries) + 0.2;
-                                
-            //                     if (value == minWeight || value == maxWeight) {
-            //                       return const SizedBox.shrink(); // Hide min/max labels
-            //                     }
-                                
-            //                     return Text(value.toStringAsFixed(1),
-            //                       style: const TextStyle(fontSize: 10),
-            //                     );
-            //                   },
-            //                 ),
-            //               ),
-            //               bottomTitles: AxisTitles(
-            //                 sideTitles: SideTitles(
-            //                   showTitles: true,
-            //                   reservedSize: 40,
-            //                   interval: 86400000, // 1 day in milliseconds
-            //                   getTitlesWidget: (value, meta) {
-            //                     final date = DateTime.fromMillisecondsSinceEpoch(value.toInt());
-            //                     return Transform.rotate(
-            //                       angle: -0.8, // Rotate -0.8 radians (about -45 degrees)
-            //                       child: Text(min
-            //                         DateFormat('dd MMM').format(date).toLowerCase(),
-            //                         style: const TextStyle(fontSize: 10),
-            //                       ),
-            //                     );
-            //                   },
-            //                 ),
-            //               ),
-            //               topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            //               rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            //             ),
-            //             borderData: FlBorderData(show: true),
-            //             minX: startDate.millisecondsSinceEpoch.toDouble(),
-            //             maxX: endDate.millisecondsSinceEpoch.toDouble(),
-            //             minY: _getMinWeight(allEntries) - 0.2,
-            //             maxY: _getMaxWeight(allEntries) + 0.2,
-            //             lineBarsData: [
-            //               // Running average line
-            //               LineChartBarData(
-            //                 spots: runningAverages.entries
-            //                     .where((entry) => entry.value > 0)
-            //                     .map((entry) => FlSpot(entry.key.millisecondsSinceEpoch.toDouble(), entry.value))
-            //                     .toList(),
-            //                 isCurved: true,
-            //                 color: Theme.of(context).colorScheme.tertiary, // Tertiary orange for moving average
-            //                 barWidth: 2,
-            //                 isStrokeCapRound: true,
-            //                 dotData: const FlDotData(show: false),
-            //                 belowBarData: BarAreaData(show: false),
-            //               ),
-            //               // Individual measurements as dots (no lines, no tooltips)
-            //               LineChartBarData(
-            //                 spots: allEntries.map((entry) => FlSpot(entry.date.millisecondsSinceEpoch.toDouble(), entry.weight)).toList(),
-            //                 isCurved: false,
-            //                 color: Colors.transparent, // Make line transparent
-            //                 barWidth: 0, // No line width
-            //                 isStrokeCapRound: true,
-            //                 dotData: FlDotData(
-            //                   show: true,
-            //                   getDotPainter: (spot, percent, barData, index) {
-            //                     return FlDotCirclePainter(
-            //                       radius: 4,
-            //                       color: Theme.of(context).colorScheme.primary,
-            //                       strokeWidth: 2,
-            //                       strokeColor: Colors.grey[100]!,
-            //                     );
-            //                   },
-            //                 ),
-            //                 belowBarData: BarAreaData(show: false),
-            //                 preventCurveOverShooting: false,
-            //               ),
-            //               ],
-            //             lineTouchData: LineTouchData(
-            //               enabled: false,
-            //             ),
-            //           ),
-            //         ),
-            //       ),
-            //     );
-            //     },
-            //   ),
-            // ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary,
-                    shape: BoxShape.circle,
+            // Interactive Chart with zoom and pan
+            Builder(
+              builder: (context) {
+                final (minY, maxY) = _getWeightRange(widget.weightEntries);
+                return SizedBox(
+                  width: double.infinity,
+                  height: 200,
+                  child: LineChart(
+                    transformationConfig: _getTransformationConfig(),
+                    LineChartData(
+                      borderData: FlBorderData(show: true),
+                      minY: minY,
+                      maxY: maxY,
+                      gridData: _getGridData(),
+                      lineBarsData: _getLineBarsData(settingsProvider),
+                      titlesData: _getTitlesData(),
+                      lineTouchData: _getLineTouchData(),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                const Text('Measurements'),
-                const SizedBox(width: 24),
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.tertiary,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text('${settingsProvider.runningAverageDays}-day Average'),
-              ],
+                );
+              },
             ),
+            const SizedBox(height: 16),
+            _ChartLegend(settingsProvider: settingsProvider),
           ],
         ),
       ),
@@ -235,13 +289,72 @@ class _WeightChartState extends State<WeightChart> {
     );
   }
 
-  double _getMinWeight(List<WeightEntry> entries) {
-    if (entries.isEmpty) return 0;
-    return entries.map((e) => e.weight).reduce((a, b) => a < b ? a : b);
+  (double min, double max) _getWeightRange(List<WeightEntry> entries) {
+    if (entries.isEmpty) return (0.0, 100.0);
+    
+    final weights = entries.map((e) => e.weight).toList();
+    final min = weights.reduce((a, b) => a < b ? a : b);
+    final max = weights.reduce((a, b) => a > b ? a : b);
+    
+    return (min - 0.2, max + 0.2);
   }
+}
 
-  double _getMaxWeight(List<WeightEntry> entries) {
-    if (entries.isEmpty) return 100;
-    return entries.map((e) => e.weight).reduce((a, b) => a > b ? a : b);
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.all(16),
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Center(
+          child: Text(
+            'No weight data available.\nAdd some weight entries to see the chart.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16, 
+              color: Theme.of(context).colorScheme.onSecondary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChartLegend extends StatelessWidget {
+  final SettingsProvider settingsProvider;
+
+  const _ChartLegend({required this.settingsProvider});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primary,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 8),
+        const Text('Measurements'),
+        const SizedBox(width: 24),
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.tertiary,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text('${settingsProvider.runningAverageDays}-day Average'),
+      ],
+    );
   }
 }
