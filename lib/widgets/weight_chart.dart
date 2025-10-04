@@ -140,7 +140,7 @@ class _WeightChartState extends State<WeightChart> {
           maxIncluded: false,
           minIncluded: false,
           reservedSize: 26,
-          getTitlesWidget: (value, meta) => _buildLeftTitle(value),
+          getTitlesWidget: (value, meta) => _buildLeftTitle(value, meta),
         ),
       ),
       bottomTitles: AxisTitles(
@@ -150,7 +150,7 @@ class _WeightChartState extends State<WeightChart> {
           minIncluded: false,
           reservedSize: 28,
           interval: 86400000, // 1 day in milliseconds
-          getTitlesWidget: (value, meta) => _buildBottomTitle(value),
+          getTitlesWidget: (value, meta) => _buildBottomTitle(value, meta),
         ),
       ),
       topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -158,22 +158,28 @@ class _WeightChartState extends State<WeightChart> {
     );
   }
 
-  Widget _buildLeftTitle(double value) {
-    return Text(
-      value.toStringAsFixed(1),
-      style: const TextStyle(fontSize: 10),
+  Widget _buildLeftTitle(double value, TitleMeta meta) {
+    return SideTitleWidget(
+      meta: meta,
+      child: Text(
+        value.toStringAsFixed(1),
+        style: const TextStyle(fontSize: 10),
+      ),
     );
   }
 
-  Widget _buildBottomTitle(double value) {
+  Widget _buildBottomTitle(double value, TitleMeta meta) {
     final date = DateTime.fromMillisecondsSinceEpoch(value.toInt());
-    return Transform.rotate(
-      angle: -0.8, // Rotate -0.8 radians (about -45 degrees)
-      child: Align(
-        alignment: Alignment.bottomLeft,
+    return SideTitleWidget(
+      meta: meta,
+      child: Transform.rotate(
+        angle: -45 * 3.14159 / 180, // -45 degrees in radians
         child: Text(
           DateFormat('dd MMM').format(date).toLowerCase(),
-          style: const TextStyle(fontSize: 10),
+          style: const TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ),
     );
