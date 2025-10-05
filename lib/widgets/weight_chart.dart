@@ -17,6 +17,7 @@ class WeightChart extends StatefulWidget {
 
 class _WeightChartState extends State<WeightChart> {
   late TransformationController _transformationController;
+  final GlobalKey _chartKey = GlobalKey();
   
   @override
   void initState() {
@@ -29,24 +30,34 @@ class _WeightChartState extends State<WeightChart> {
     super.didChangeDependencies();
     // Calculate zoom and translation to show last 7 days using timestamps
     if (widget.weightEntries.length > 7) {
+      // Use post-frame callback to ensure the widget is rendered before getting width
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _updateChartTransformation();
+      });
+    }
+  }
+
+  void _updateChartTransformation() {
+    if (widget.weightEntries.length > 7) {
       final entries = widget.weightEntries;
-      final last7Entries = entries.skip(entries.length - 7).toList();
       
-      if (last7Entries.length >= 2) {
-        final firstTimestamp = last7Entries.first.date.millisecondsSinceEpoch;
-        final lastTimestamp = last7Entries.last.date.millisecondsSinceEpoch;
-        
-        // Calculate zoom to show approximately 7 days (fence post rule)
-        final zoomLevel = entries.length / 6.0;
-        
-        // Calculate translation to center on the last 7 days
-        final centerTimestamp = (firstTimestamp + lastTimestamp) / 2;
-        final chartCenter = (entries.first.date.millisecondsSinceEpoch + entries.last.date.millisecondsSinceEpoch) / 2;
-        final translationX = -(centerTimestamp - chartCenter) * 0.001; // Scale factor for translation
-        
-        _transformationController.value = Matrix4.diagonal3Values(zoomLevel, 1.0, 1.0) * 
-                                         Matrix4.translationValues(translationX, 0.0, 0.0);
-      }
+      // Calculate zoom to show approximately 7 days (fence post rule)
+      final zoomLevel = entries.length / 6.0;
+      _transformationController.value = Matrix4.diagonal3Values(zoomLevel, 1.0, 1.0);
+  
+      final chartWidth = _getChartWidth();
+      
+      // Calculate timestamps
+      final firstTimestamp = entries.first.date.millisecondsSinceEpoch;
+      final lastTimestamp = entries.last.date.millisecondsSinceEpoch;
+      final timestampRange = lastTimestamp - firstTimestamp;
+
+      // Calculate target position
+      final targetTimestamp = lastTimestamp - 7 * Duration.millisecondsPerDay;
+      final targetPosition = ((targetTimestamp - firstTimestamp) / timestampRange) * chartWidth;
+      final translationX = -targetPosition;
+
+      _transformationController.value *= Matrix4.translationValues(translationX, 0.0, 0.0);
     }
   }
 
@@ -54,6 +65,18 @@ class _WeightChartState extends State<WeightChart> {
   void dispose() {
     _transformationController.dispose();
     super.dispose();
+  }
+
+  /// Gets the actual chart width from the widget's render object
+  double _getChartWidth() {
+    final margin = 24; // Dont know why this isn't 30, from the leftTitles ReservedWidth.
+    
+    final RenderBox? renderBox = _chartKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox != null) {
+      return renderBox.size.width - margin;
+    }
+    // Fallback to a reasonable default if widget hasn't been rendered yet
+    return 281.6 - margin;
   }
 
   List<FlSpot> get _dataPoints {
@@ -139,7 +162,7 @@ class _WeightChartState extends State<WeightChart> {
           showTitles: true,
           maxIncluded: false,
           minIncluded: false,
-          reservedSize: 26,
+          reservedSize: 30,
           getTitlesWidget: (value, meta) => _buildLeftTitle(value, meta),
         ),
       ),
@@ -261,6 +284,7 @@ class _WeightChartState extends State<WeightChart> {
                   width: double.infinity,
                   height: 200,
                   child: LineChart(
+                    key: _chartKey,
                     transformationConfig: _getTransformationConfig(),
                     LineChartData(
                       borderData: FlBorderData(show: true),
