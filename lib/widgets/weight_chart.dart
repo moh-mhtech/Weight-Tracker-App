@@ -17,7 +17,7 @@ class WeightChart extends StatefulWidget {
 
 class _WeightChartState extends State<WeightChart> {
   late TransformationController _transformationController;
-  final GlobalKey _chartKey = GlobalKey();
+  double _chartWidth = 280.0; // Default fallback width
   
   @override
   void initState() {
@@ -26,58 +26,29 @@ class _WeightChartState extends State<WeightChart> {
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Calculate zoom and translation to show last 7 days using timestamps
-    if (widget.weightEntries.length > 7) {
-      // Use post-frame callback to ensure the widget is rendered before getting width
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _updateChartTransformation();
-      });
-    }
-  }
-
-  void _updateChartTransformation() {
-    if (widget.weightEntries.length > 7) {
-      final entries = widget.weightEntries;
-      
-      // Calculate zoom to show approximately 7 days (fence post rule)
-      final zoomLevel = entries.length / 6.0;
-      _transformationController.value = Matrix4.diagonal3Values(zoomLevel, 1.0, 1.0);
-  
-      final chartWidth = _getChartWidth();
-      
-      // Calculate timestamps
-      final firstTimestamp = entries.first.date.millisecondsSinceEpoch;
-      final lastTimestamp = entries.last.date.millisecondsSinceEpoch;
-      final timestampRange = lastTimestamp - firstTimestamp;
-
-      // Calculate target position
-      final targetTimestamp = lastTimestamp - 7 * Duration.millisecondsPerDay;
-      final targetPosition = ((targetTimestamp - firstTimestamp) / timestampRange) * chartWidth;
-      final translationX = -targetPosition;
-
-      _transformationController.value *= Matrix4.translationValues(translationX, 0.0, 0.0);
-    }
-  }
-
-  @override
   void dispose() {
     _transformationController.dispose();
     super.dispose();
   }
 
-  /// Gets the actual chart width from the widget's render object
-  double _getChartWidth() {
-    final margin = 24; // Dont know why this isn't 30, from the leftTitles ReservedWidth.
+  void _updateChartTransformation(double chartWidth) {
+    final (minTime, maxTime) = _getTimeRange(widget.weightEntries);
+    final entriesPeriod = maxTime - minTime;
     
-    final RenderBox? renderBox = _chartKey.currentContext?.findRenderObject() as RenderBox?;
-    if (renderBox != null) {
-      return renderBox.size.width - margin;
+    // Use zoom and pan if more than 7 days are in the entries
+    if (entriesPeriod > 7*Duration.millisecondsPerDay) {
+      // Calculate zoom to show approximately 7 days (fence post rule)
+      final zoomLevel = entriesPeriod / 6.0;
+      _transformationController.value = Matrix4.diagonal3Values(zoomLevel, 1.0, 1.0);  
+
+      // Calculate target position
+      final targetTimestamp = maxTime - 7 * Duration.millisecondsPerDay;
+      final targetPosition = ((targetTimestamp - minTime) / entriesPeriod) * chartWidth;
+      final translationX = -targetPosition;
+      _transformationController.value *= Matrix4.translationValues(translationX, 0.0, 0.0);
     }
-    // Fallback to a reasonable default if widget hasn't been rendered yet
-    return 281.6 - margin;
   }
+
 
   List<FlSpot> get _dataPoints {
     return widget.weightEntries.map((weightEntry) {
@@ -107,7 +78,7 @@ class _WeightChartState extends State<WeightChart> {
     return FlTransformationConfig(
       scaleAxis: FlScaleAxis.horizontal,
       minScale: 1.0,
-      maxScale: 50.0,
+      // maxScale: 50.0,
       panEnabled: true,
       scaleEnabled: true,
       transformationController: _transformationController,
@@ -277,19 +248,29 @@ class _WeightChartState extends State<WeightChart> {
               ),
             ),
             // Interactive Chart with zoom and pan
-            Builder(
-              builder: (context) {
+            LayoutBuilder(
+              builder: (context, constraints) {
+                // Update the stored chart width with the actual available width
+                _chartWidth = constraints.maxWidth;
+                final double margins = 24; // Dont know why this isn't 30, from the leftTitles ReservedWidth.
+                
+                // Calculate transformation now that we have the actual width
+                _updateChartTransformation(_chartWidth - margins);
+                
                 final (minY, maxY) = _getWeightRange(widget.weightEntries);
+                final (minX, maxX) = _getTimeRange(widget.weightEntries);
+                
                 return SizedBox(
                   width: double.infinity,
                   height: 200,
                   child: LineChart(
-                    key: _chartKey,
                     transformationConfig: _getTransformationConfig(),
                     LineChartData(
                       borderData: FlBorderData(show: true),
                       minY: minY,
                       maxY: maxY,
+                      minX: minX,
+                      maxX: maxX,
                       gridData: _getGridData(),
                       lineBarsData: _getLineBarsData(settingsProvider),
                       titlesData: _getTitlesData(),
@@ -310,13 +291,30 @@ class _WeightChartState extends State<WeightChart> {
   }
 
   (double min, double max) _getWeightRange(List<WeightEntry> entries) {
-    if (entries.isEmpty) return (0.0, 100.0);
+    if (entries.isEmpty) return (0.0, 0.0);
     
     final weights = entries.map((e) => e.weight).toList();
     final min = weights.reduce((a, b) => a < b ? a : b);
     final max = weights.reduce((a, b) => a > b ? a : b);
     
     return (min - 0.2, max + 0.2);
+  }
+
+  (double min, double max) _getTimeRange(List<WeightEntry> entries) {
+    if (entries.isEmpty) return (0.0, 0.0);
+    
+    final timestamps = entries.map((e) {
+      final dateOnly = DateTime(e.date.year, e.date.month, e.date.day);
+      return dateOnly.millisecondsSinceEpoch.toDouble();
+    }).toList();
+    
+    final min = timestamps.reduce((a, b) => a < b ? a : b);
+    final max = timestamps.reduce((a, b) => a > b ? a : b);
+    
+    // Add some padding to the X range
+    final halfDayMs = const Duration(hours: 12).inMilliseconds.toDouble();
+    final padding = halfDayMs;
+    return (min - padding, max + padding);
   }
 }
 
