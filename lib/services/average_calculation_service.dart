@@ -18,8 +18,8 @@ class AverageCalculationService {
       ..sort((a, b) => a.date.compareTo(b.date));
 
     // Create date range from first to last entry
-    final firstDate = DateTime(sortedEntries.first.date.year, sortedEntries.first.date.month, sortedEntries.first.date.day);
-    final lastDate = DateTime(sortedEntries.last.date.year, sortedEntries.last.date.month, sortedEntries.last.date.day);
+    final firstDate = DateTime.utc(sortedEntries.first.date.year, sortedEntries.first.date.month, sortedEntries.first.date.day);
+    final lastDate = DateTime.utc(sortedEntries.last.date.year, sortedEntries.last.date.month, sortedEntries.last.date.day);
     
     // Initialize array of all dates with empty measurement lists
     final Map<DateTime, List<double>> dateMeasurements = {};
@@ -31,7 +31,7 @@ class AverageCalculationService {
     
     // Add each entry's weight to all relevant dates (current date and previous dates within averaging period)
     for (final entry in sortedEntries) {
-      final entryDate = DateTime(entry.date.year, entry.date.month, entry.date.day);
+      final entryDate = DateTime.utc(entry.date.year, entry.date.month, entry.date.day);
       
       // Add this entry's weight to the measurement date
       dateMeasurements[entryDate]!.add(entry.weight);

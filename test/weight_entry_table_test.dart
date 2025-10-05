@@ -33,7 +33,7 @@ void main() {
       await tester.runAsync(() async {
         // Arrange
         final entries = [
-          WeightEntry(weight: 75.5, date: DateTime(2024, 1, 1)),
+          WeightEntry(weight: 75.5, date: DateTime.utc(2024, 1, 1)),
         ];
 
         // Act
@@ -51,9 +51,9 @@ void main() {
       await tester.runAsync(() async {
         // Arrange
         final entries = [
-          WeightEntry(weight: 70.0, date: DateTime(2024, 1, 1)),
-          WeightEntry(weight: 71.0, date: DateTime(2024, 1, 2)),
-          WeightEntry(weight: 69.0, date: DateTime(2024, 1, 3)),
+          WeightEntry(weight: 70.0, date: DateTime.utc(2024, 1, 1)),
+          WeightEntry(weight: 71.0, date: DateTime.utc(2024, 1, 2)),
+          WeightEntry(weight: 69.0, date: DateTime.utc(2024, 1, 3)),
         ];
 
         // Act
@@ -76,9 +76,9 @@ void main() {
       await tester.runAsync(() async {
         // Arrange - Entries with different time components but same date
         final entries = [
-          WeightEntry(weight: 70.0, date: DateTime(2024, 1, 1, 8, 30)), // 8:30 AM
-          WeightEntry(weight: 70.5, date: DateTime(2024, 1, 1, 14, 45)), // 2:45 PM same day
-          WeightEntry(weight: 71.0, date: DateTime(2024, 1, 2, 9, 15)), // 9:15 AM next day
+          WeightEntry(weight: 70.0, date: DateTime.utc(2024, 1, 1, 8, 30)), // 8:30 AM
+          WeightEntry(weight: 70.5, date: DateTime.utc(2024, 1, 1, 14, 45)), // 2:45 PM same day
+          WeightEntry(weight: 71.0, date: DateTime.utc(2024, 1, 2, 9, 15)), // 9:15 AM next day
         ];
 
         // Act
@@ -103,7 +103,7 @@ void main() {
       await tester.runAsync(() async {
         // Arrange
         final entries = [
-          WeightEntry(weight: 154.0, date: DateTime(2024, 1, 1)), // ~70kg in lbs
+          WeightEntry(weight: 154.0, date: DateTime.utc(2024, 1, 1)), // ~70kg in lbs
         ];
 
         // Act

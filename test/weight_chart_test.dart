@@ -40,7 +40,7 @@ void main() {
     testWidgets('displays chart with single weight entry', (WidgetTester tester) async {
       // Arrange
       final singleEntry = [
-        WeightEntry(weight: 70.0, date: DateTime(2024, 1, 1)),
+        WeightEntry(weight: 70.0, date: DateTime.utc(2024, 1, 1)),
       ];
 
       // Act
@@ -57,10 +57,10 @@ void main() {
     testWidgets('displays chart with multiple weight entries', (WidgetTester tester) async {
       // Arrange
       final multipleEntries = [
-        WeightEntry(weight: 70.0, date: DateTime(2024, 1, 1)),
-        WeightEntry(weight: 71.0, date: DateTime(2024, 1, 2)),
-        WeightEntry(weight: 69.0, date: DateTime(2024, 1, 3)),
-        WeightEntry(weight: 72.0, date: DateTime(2024, 1, 4)),
+        WeightEntry(weight: 70.0, date: DateTime.utc(2024, 1, 1)),
+        WeightEntry(weight: 71.0, date: DateTime.utc(2024, 1, 2)),
+        WeightEntry(weight: 69.0, date: DateTime.utc(2024, 1, 3)),
+        WeightEntry(weight: 72.0, date: DateTime.utc(2024, 1, 4)),
       ];
 
       // Act
@@ -77,9 +77,9 @@ void main() {
     testWidgets('displays correct average with different running average days', (WidgetTester tester) async {
       // Arrange
       final entries = [
-        WeightEntry(weight: 70.0, date: DateTime(2024, 1, 1)),
-        WeightEntry(weight: 71.0, date: DateTime(2024, 1, 2)),
-        WeightEntry(weight: 69.0, date: DateTime(2024, 1, 3)),
+        WeightEntry(weight: 70.0, date: DateTime.utc(2024, 1, 1)),
+        WeightEntry(weight: 71.0, date: DateTime.utc(2024, 1, 2)),
+        WeightEntry(weight: 69.0, date: DateTime.utc(2024, 1, 3)),
       ];
 
       // Act - Test with 3-day average
@@ -95,7 +95,7 @@ void main() {
     testWidgets('displays correct weight unit (lbs)', (WidgetTester tester) async {
       // Arrange
       final entries = [
-        WeightEntry(weight: 154.0, date: DateTime(2024, 1, 1)), // ~70kg in lbs
+        WeightEntry(weight: 154.0, date: DateTime.utc(2024, 1, 1)), // ~70kg in lbs
       ];
 
       // Act
@@ -110,9 +110,9 @@ void main() {
     testWidgets('handles entries with same date correctly', (WidgetTester tester) async {
       // Arrange
       final entriesWithSameDate = [
-        WeightEntry(weight: 70.0, date: DateTime(2024, 1, 1)),
-        WeightEntry(weight: 70.5, date: DateTime(2024, 1, 1)), // Same date
-        WeightEntry(weight: 71.0, date: DateTime(2024, 1, 2)),
+        WeightEntry(weight: 70.0, date: DateTime.utc(2024, 1, 1)),
+        WeightEntry(weight: 70.5, date: DateTime.utc(2024, 1, 1)), // Same date
+        WeightEntry(weight: 71.0, date: DateTime.utc(2024, 1, 2)),
       ];
 
       // Act
@@ -128,8 +128,8 @@ void main() {
     testWidgets('displays legend correctly', (WidgetTester tester) async {
       // Arrange
       final entries = [
-        WeightEntry(weight: 70.0, date: DateTime(2024, 1, 1)),
-        WeightEntry(weight: 71.0, date: DateTime(2024, 1, 2)),
+        WeightEntry(weight: 70.0, date: DateTime.utc(2024, 1, 1)),
+        WeightEntry(weight: 71.0, date: DateTime.utc(2024, 1, 2)),
       ];
 
       // Act
@@ -152,8 +152,8 @@ void main() {
     testWidgets('chart updates when settings change', (WidgetTester tester) async {
       // Arrange
       final entries = [
-        WeightEntry(weight: 70.0, date: DateTime(2024, 1, 1)),
-        WeightEntry(weight: 71.0, date: DateTime(2024, 1, 2)),
+        WeightEntry(weight: 70.0, date: DateTime.utc(2024, 1, 1)),
+        WeightEntry(weight: 71.0, date: DateTime.utc(2024, 1, 2)),
       ];
 
       // Act - Initial render
@@ -175,8 +175,8 @@ void main() {
     testWidgets('chart handles edge case with very small weight values', (WidgetTester tester) async {
       // Arrange
       final entries = [
-        WeightEntry(weight: 0.1, date: DateTime(2024, 1, 1)),
-        WeightEntry(weight: 0.2, date: DateTime(2024, 1, 2)),
+        WeightEntry(weight: 0.1, date: DateTime.utc(2024, 1, 1)),
+        WeightEntry(weight: 0.2, date: DateTime.utc(2024, 1, 2)),
       ];
 
       // Act
@@ -191,8 +191,8 @@ void main() {
     testWidgets('chart handles edge case with very large weight values', (WidgetTester tester) async {
       // Arrange
       final entries = [
-        WeightEntry(weight: 200.0, date: DateTime(2024, 1, 1)),
-        WeightEntry(weight: 250.0, date: DateTime(2024, 1, 2)),
+        WeightEntry(weight: 200.0, date: DateTime.utc(2024, 1, 1)),
+        WeightEntry(weight: 250.0, date: DateTime.utc(2024, 1, 2)),
       ];
 
       // Act
@@ -207,8 +207,8 @@ void main() {
     testWidgets('chart displays correct date range for 7-day window', (WidgetTester tester) async {
       // Arrange
       final entries = [
-        WeightEntry(weight: 70.0, date: DateTime(2024, 1, 1)),
-        WeightEntry(weight: 71.0, date: DateTime(2024, 1, 8)), // 7 days later
+        WeightEntry(weight: 70.0, date: DateTime.utc(2024, 1, 1)),
+        WeightEntry(weight: 71.0, date: DateTime.utc(2024, 1, 8)), // 7 days later
       ];
 
       // Act
@@ -223,10 +223,10 @@ void main() {
     testWidgets('chart handles unsorted entries correctly', (WidgetTester tester) async {
       // Arrange - Entries in reverse chronological order
       final unsortedEntries = [
-        WeightEntry(weight: 72.0, date: DateTime(2024, 1, 4)),
-        WeightEntry(weight: 70.0, date: DateTime(2024, 1, 1)),
-        WeightEntry(weight: 71.0, date: DateTime(2024, 1, 2)),
-        WeightEntry(weight: 69.0, date: DateTime(2024, 1, 3)),
+        WeightEntry(weight: 72.0, date: DateTime.utc(2024, 1, 4)),
+        WeightEntry(weight: 70.0, date: DateTime.utc(2024, 1, 1)),
+        WeightEntry(weight: 71.0, date: DateTime.utc(2024, 1, 2)),
+        WeightEntry(weight: 69.0, date: DateTime.utc(2024, 1, 3)),
       ];
 
       // Act
@@ -242,8 +242,8 @@ void main() {
     testWidgets('chart displays proper formatting for average values', (WidgetTester tester) async {
       // Arrange
       final entries = [
-        WeightEntry(weight: 70.123, date: DateTime(2024, 1, 1)),
-        WeightEntry(weight: 71.456, date: DateTime(2024, 1, 2)),
+        WeightEntry(weight: 70.123, date: DateTime.utc(2024, 1, 1)),
+        WeightEntry(weight: 71.456, date: DateTime.utc(2024, 1, 2)),
       ];
 
       // Act
@@ -258,9 +258,9 @@ void main() {
     testWidgets('chart handles entries with different time components correctly', (WidgetTester tester) async {
       // Arrange - Entries with different time components but same date
       final entries = [
-        WeightEntry(weight: 70.0, date: DateTime(2024, 1, 1, 8, 30)), // 8:30 AM
-        WeightEntry(weight: 71.0, date: DateTime(2024, 1, 1, 14, 45)), // 2:45 PM
-        WeightEntry(weight: 69.0, date: DateTime(2024, 1, 2, 9, 15)), // 9:15 AM next day
+        WeightEntry(weight: 70.0, date: DateTime.utc(2024, 1, 1, 8, 30)), // 8:30 AM
+        WeightEntry(weight: 71.0, date: DateTime.utc(2024, 1, 1, 14, 45)), // 2:45 PM
+        WeightEntry(weight: 69.0, date: DateTime.utc(2024, 1, 2, 9, 15)), // 9:15 AM next day
       ];
 
       // Act

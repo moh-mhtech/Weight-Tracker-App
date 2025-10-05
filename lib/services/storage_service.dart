@@ -119,7 +119,7 @@ class StorageService {
     try {
       final List<WeightEntry> allEntries = await _getWeightEntriesFromWeb();
       return allEntries.where((entry) {
-        final entryDate = DateTime(entry.date.year, entry.date.month, entry.date.day);
+        final entryDate = DateTime.utc(entry.date.year, entry.date.month, entry.date.day);
         return entryDate.isAfter(startDate.subtract(const Duration(days: 1))) &&
                entryDate.isBefore(endDate.add(const Duration(days: 1)));
       }).toList();

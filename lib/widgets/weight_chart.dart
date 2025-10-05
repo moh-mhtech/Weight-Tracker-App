@@ -40,16 +40,17 @@ class _WeightChartState extends State<WeightChart> {
     final totalTimePeriod = maxTime - minTime + 2*_graphTimePadding; // includes padding specified by chart minX and maxX
     
     // Use zoom and pan if more than 7 days are in the entries
-    if (maxTime - minTime >= _graphVisibleDuration) {
+    if (totalTimePeriod >= _graphVisibleDuration) {
       // Calculate zoom to show correct timespan
-      final zoomLevel = totalTimePeriod / (_graphVisibleDuration);
+      final zoomLevel = totalTimePeriod / _graphVisibleDuration;
       _transformationController.value = Matrix4.diagonal3Values(zoomLevel, 1.0, 1.0);  
 
       // Calculate target position
       final targetStartTime = maxTime - _graphVisibleDuration;
-      final targetStartPosition = ((targetStartTime - minTime - _graphTimePadding) / _graphVisibleDuration) * chartWidth;
-      final translationX = -targetStartPosition;
-      _transformationController.value *= Matrix4.translationValues(translationX, 0.0, 0.0);
+      final translationTime = -(targetStartTime - minTime - _graphTimePadding);
+      final translationX = (translationTime / _graphVisibleDuration) * chartWidth;
+      // _transformationController.value *= Matrix4.translationValues(translationX, 0.0, 0.0);
+      _transformationController.value *= Matrix4.translationValues(-281.6/zoomLevel, 0.0, 0.0);
     }
   }
 
@@ -57,7 +58,7 @@ class _WeightChartState extends State<WeightChart> {
   List<FlSpot> get _dataPoints {
     return widget.weightEntries.map((weightEntry) {
       // Remove the time part by creating a new DateTime with only year, month, day
-      final dateOnly = DateTime(weightEntry.date.year, weightEntry.date.month, weightEntry.date.day);
+      final dateOnly = DateTime.utc(weightEntry.date.year, weightEntry.date.month, weightEntry.date.day);
       final timestamp = dateOnly.millisecondsSinceEpoch.toDouble();
       return FlSpot(timestamp, weightEntry.weight);
     }).toList();
@@ -71,7 +72,7 @@ class _WeightChartState extends State<WeightChart> {
     return runningAverages.entries
         .where((entry) => entry.value > 0)
         .map((entry) {
-          final dateOnly = DateTime(entry.key.year, entry.key.month, entry.key.day);
+          final dateOnly = DateTime.utc(entry.key.year, entry.key.month, entry.key.day);
           final timestamp = dateOnly.millisecondsSinceEpoch.toDouble();
           return FlSpot(timestamp, entry.value);
         })
@@ -227,7 +228,7 @@ class _WeightChartState extends State<WeightChart> {
         );
 
         // Get the latest running average for the label (from all data)
-        final latestDateNormalized = DateTime(allEntries.last.date.year, allEntries.last.date.month, allEntries.last.date.day);
+        final latestDateNormalized = DateTime.utc(allEntries.last.date.year, allEntries.last.date.month, allEntries.last.date.day);
         final latestRunningAverage = runningAverages[latestDateNormalized] ?? 0.0;
 
         return Card(
@@ -311,7 +312,7 @@ class _WeightChartState extends State<WeightChart> {
     if (entries.isEmpty) return (0.0, 0.0);
     
     final timestamps = entries.map((e) {
-      final dateOnly = DateTime(e.date.year, e.date.month, e.date.day);
+      final dateOnly = DateTime.utc(e.date.year, e.date.month, e.date.day);
       return dateOnly.millisecondsSinceEpoch.toDouble();
     }).toList();
     

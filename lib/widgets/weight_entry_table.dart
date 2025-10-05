@@ -57,7 +57,7 @@ class _WeightEntryTableState extends State<WeightEntryTable> {
            
             ...visibleEntries.map((entry) {
               // Normalize the entry date to match the keys in dateToRunningAverage
-              final normalizedDate = DateTime(entry.date.year, entry.date.month, entry.date.day);
+              final normalizedDate = DateTime.utc(entry.date.year, entry.date.month, entry.date.day);
               final runningAvg = dateToRunningAverage[normalizedDate] ?? 0.0;
               
               return Container(
