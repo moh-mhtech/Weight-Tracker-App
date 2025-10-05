@@ -9,6 +9,7 @@ import '../services/average_calculation_service.dart';
 final double _graphTimePadding = Duration.millisecondsPerDay / 2;
 final double _graphWeightPadding = 0.2;
 final double _graphVisibleDuration = 7*Duration.millisecondsPerDay + 2*_graphTimePadding;
+const double _margins = 32;
 
 class WeightChart extends StatefulWidget {
   final List<WeightEntry> weightEntries;
@@ -47,10 +48,10 @@ class _WeightChartState extends State<WeightChart> {
 
       // Calculate target position
       final targetStartTime = maxTime - _graphVisibleDuration;
-      final translationTime = -(targetStartTime - minTime - _graphTimePadding);
-      final translationX = (translationTime / _graphVisibleDuration) * chartWidth;
-      // _transformationController.value *= Matrix4.translationValues(translationX, 0.0, 0.0);
-      _transformationController.value *= Matrix4.translationValues(-281.6/zoomLevel, 0.0, 0.0);
+      final translationTime = -(targetStartTime - (minTime - _graphTimePadding));
+      final translationX = (translationTime / _graphVisibleDuration * (chartWidth - _margins) - _margins/2 )/ zoomLevel;
+      _transformationController.value *= Matrix4.translationValues(translationX, 0.0, 0.0);
+      // _transformationController.value *= Matrix4.translationValues(-44.8, 0.0, 0.0);
     }
   }
 
@@ -82,8 +83,8 @@ class _WeightChartState extends State<WeightChart> {
   FlTransformationConfig _getTransformationConfig() {
     return FlTransformationConfig(
       scaleAxis: FlScaleAxis.horizontal,
-      // minScale: 1.0,
-      // maxScale: 50.0,
+      minScale: 1.0,
+      maxScale: 500.0,
       panEnabled: true,
       scaleEnabled: true,
       transformationController: _transformationController,
