@@ -6,6 +6,10 @@ import '../models/weight_entry.dart';
 import '../providers/settings_provider.dart';
 import '../services/average_calculation_service.dart';
 
+final double _graphTimePadding = Duration.millisecondsPerDay / 2;
+final double _graphWeightPadding = 0.2;
+final double _graphVisibleDuration = 7*Duration.millisecondsPerDay + 2*_graphTimePadding;
+
 class WeightChart extends StatefulWidget {
   final List<WeightEntry> weightEntries;
 
@@ -33,18 +37,18 @@ class _WeightChartState extends State<WeightChart> {
 
   void _updateChartTransformation(double chartWidth) {
     final (minTime, maxTime) = _getTimeRange(widget.weightEntries);
-    final entriesPeriod = maxTime - minTime;
+    final totalTimePeriod = maxTime - minTime + 2*_graphTimePadding; // includes padding specified by chart minX and maxX
     
     // Use zoom and pan if more than 7 days are in the entries
-    if (entriesPeriod > 7*Duration.millisecondsPerDay) {
-      // Calculate zoom to show approximately 7 days (fence post rule)
-      final zoomLevel = entriesPeriod / 6.0;
+    if (maxTime - minTime >= _graphVisibleDuration) {
+      // Calculate zoom to show correct timespan
+      final zoomLevel = totalTimePeriod / (_graphVisibleDuration);
       _transformationController.value = Matrix4.diagonal3Values(zoomLevel, 1.0, 1.0);  
 
       // Calculate target position
-      final targetTimestamp = maxTime - 7 * Duration.millisecondsPerDay;
-      final targetPosition = ((targetTimestamp - minTime) / entriesPeriod) * chartWidth;
-      final translationX = -targetPosition;
+      final targetStartTime = maxTime - _graphVisibleDuration;
+      final targetStartPosition = ((targetStartTime - minTime - _graphTimePadding) / _graphVisibleDuration) * chartWidth;
+      final translationX = -targetStartPosition;
       _transformationController.value *= Matrix4.translationValues(translationX, 0.0, 0.0);
     }
   }
@@ -77,7 +81,7 @@ class _WeightChartState extends State<WeightChart> {
   FlTransformationConfig _getTransformationConfig() {
     return FlTransformationConfig(
       scaleAxis: FlScaleAxis.horizontal,
-      minScale: 1.0,
+      // minScale: 1.0,
       // maxScale: 50.0,
       panEnabled: true,
       scaleEnabled: true,
@@ -143,7 +147,7 @@ class _WeightChartState extends State<WeightChart> {
           maxIncluded: false,
           minIncluded: false,
           reservedSize: 28,
-          interval: 86400000, // 1 day in milliseconds
+          interval: Duration.millisecondsPerDay.toDouble(), // 1 day in milliseconds
           getTitlesWidget: (value, meta) => _buildBottomTitle(value, meta),
         ),
       ),
@@ -252,13 +256,16 @@ class _WeightChartState extends State<WeightChart> {
               builder: (context, constraints) {
                 // Update the stored chart width with the actual available width
                 _chartWidth = constraints.maxWidth;
-                final double margins = 24; // Dont know why this isn't 30, from the leftTitles ReservedWidth.
                 
                 // Calculate transformation now that we have the actual width
-                _updateChartTransformation(_chartWidth - margins);
+                _updateChartTransformation(_chartWidth);
                 
                 final (minY, maxY) = _getWeightRange(widget.weightEntries);
-                final (minX, maxX) = _getTimeRange(widget.weightEntries);
+                final (minTime, maxTime) = _getTimeRange(widget.weightEntries);
+                final timeRange = maxTime - minTime;
+                
+                // Set minX depending on wheter measurement timerange is below _graphVisibleDuration
+                final shouldSetXBounds = timeRange < _graphVisibleDuration;
                 
                 return SizedBox(
                   width: double.infinity,
@@ -269,8 +276,8 @@ class _WeightChartState extends State<WeightChart> {
                       borderData: FlBorderData(show: true),
                       minY: minY,
                       maxY: maxY,
-                      minX: minX,
-                      maxX: maxX,
+                      minX: shouldSetXBounds ? maxTime - _graphVisibleDuration - _graphTimePadding : minTime - _graphTimePadding,
+                      maxX: maxTime + _graphTimePadding,
                       gridData: _getGridData(),
                       lineBarsData: _getLineBarsData(settingsProvider),
                       titlesData: _getTitlesData(),
@@ -297,7 +304,7 @@ class _WeightChartState extends State<WeightChart> {
     final min = weights.reduce((a, b) => a < b ? a : b);
     final max = weights.reduce((a, b) => a > b ? a : b);
     
-    return (min - 0.2, max + 0.2);
+    return (min - _graphWeightPadding, max + _graphWeightPadding);
   }
 
   (double min, double max) _getTimeRange(List<WeightEntry> entries) {
@@ -311,10 +318,7 @@ class _WeightChartState extends State<WeightChart> {
     final min = timestamps.reduce((a, b) => a < b ? a : b);
     final max = timestamps.reduce((a, b) => a > b ? a : b);
     
-    // Add some padding to the X range
-    final halfDayMs = const Duration(hours: 12).inMilliseconds.toDouble();
-    final padding = halfDayMs;
-    return (min - padding, max + padding);
+    return (min, max);
   }
 }
 
