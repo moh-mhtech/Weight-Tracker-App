@@ -8,7 +8,7 @@ import '../services/average_calculation_service.dart';
 
 final double _graphTimePadding = Duration.millisecondsPerDay / 2;
 final double _graphWeightPadding = 0.2;
-final double _graphVisibleDuration = 7*Duration.millisecondsPerDay + 2*_graphTimePadding;
+final double _graphVisibleDuration = 10*Duration.millisecondsPerDay + 2*_graphTimePadding;
 const double _margins = 32;
 
 class WeightChart extends StatefulWidget {
