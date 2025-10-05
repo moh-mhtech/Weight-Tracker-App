@@ -81,15 +81,18 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 SizedBox(
-                  width: 32,
-                  height: 32,
+                  width: 40,
+                  height: 40,
                   child: Image.asset(
-                    'assets/dial dark.png',
+                    'assets/curve trans.png',
                     fit: BoxFit.contain,
                   ),
                 ),
-                const SizedBox(width: 12),
-                const Text('Weight Graph'),
+                const SizedBox(width: 8),
+                const Text(
+                  'Weight Graph',
+                  style: TextStyle( fontWeight: FontWeight.bold),
+                ),
               ],
             ),
             backgroundColor: Theme.of(context).colorScheme.primary,
