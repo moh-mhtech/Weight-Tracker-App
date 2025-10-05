@@ -4,7 +4,9 @@ import '../database/database_helper.dart';
 import '../providers/settings_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  final VoidCallback? onDataChanged;
+  
+  const SettingsScreen({super.key, this.onDataChanged});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -64,6 +66,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('All data has been cleared')),
           );
+          // Notify the parent screen that data has changed
+          widget.onDataChanged?.call();
         }
       } catch (e) {
         if (mounted) {
