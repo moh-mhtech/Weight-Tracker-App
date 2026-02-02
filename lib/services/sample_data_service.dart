@@ -38,16 +38,16 @@ class SampleDataService {
   static List<WeightEntry> _generateSampleData() {
     final List<WeightEntry> entries = [];
     final DateTime today = DateTime.now();
-    final DateTime startDate = today.subtract(const Duration(days: 39)); // 40 days total
+    final DateTime startDate = today.subtract(const Duration(days: 79)); // 80 days total
     
-    // Linear progression from 85kg to 80kg over 40 days
-    const double startWeight = 85.0;
+    // Linear progression from 90kg to 80kg over 80 days
+    const double startWeight = 90.0;
     const double endWeight = 80.0;
     const double totalWeightLoss = startWeight - endWeight;
-    const int totalDays = 40;
+    const int totalDays = 80;
     
-    // Define days to skip (randomly selected) - but ensure we have at least 30 days of data
-    final Set<int> skipDays = {3, 7, 12, 18, 25, 35};
+    // Define days to skip (randomly selected) - but ensure we have plenty of data
+    final Set<int> skipDays = {3, 7, 12, 18, 25, 35, 42, 50, 58, 65, 72};
     
     // Define continuous days to skip (6 days starting from day 15)
     final Set<int> continuousSkipDays = {15, 16, 17, 18, 19, 20};

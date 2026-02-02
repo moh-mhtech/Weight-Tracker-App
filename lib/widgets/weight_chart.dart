@@ -5,11 +5,13 @@ import 'package:provider/provider.dart';
 import '../models/weight_entry.dart';
 import '../providers/settings_provider.dart';
 import '../services/average_calculation_service.dart';
+import '../services/chart_viewport_service.dart';
 
-final double _graphTimePadding = Duration.millisecondsPerDay / 2;
-final double _graphWeightPadding = 0.2;
-final double _graphVisibleDuration = 10*Duration.millisecondsPerDay + 2*_graphTimePadding;
-const double _margins = 32;
+// Chart configuration constants
+const double _graphTimePadding = Duration.millisecondsPerDay / 2;
+const double _graphWeightPadding = 0.2;
+const double _graphVisibleDuration = 10 * Duration.millisecondsPerDay + 2 * _graphTimePadding;
+const double _leftTitleWidth = 28.0;
 
 class WeightChart extends StatefulWidget {
   final List<WeightEntry> weightEntries;
@@ -22,63 +24,182 @@ class WeightChart extends StatefulWidget {
 
 class _WeightChartState extends State<WeightChart> {
   late TransformationController _transformationController;
-  double _chartWidth = 280.0; // Default fallback width
-  
+  double _chartWidth = 280.0;
+  bool _initialTransformationApplied = false;
+  List<WeightEntry> _chartEntries = [];
+  bool _isLoadingMore = false;
+  bool _isAdjustingTransformation = false;
+
+  // Cached running averages - computed once per build
+  Map<DateTime, double> _cachedRunningAverages = {};
+  int _cachedAverageDays = 0;
+
   @override
   void initState() {
     super.initState();
     _transformationController = TransformationController();
+    _transformationController.addListener(_onTransformationChanged);
+    _initializeChartEntries();
   }
 
   @override
   void dispose() {
+    _transformationController.removeListener(_onTransformationChanged);
     _transformationController.dispose();
     super.dispose();
   }
 
-  void _updateChartTransformation(double chartWidth) {
-    final (minTime, maxTime) = _getTimeRange(widget.weightEntries);
-    final totalTimePeriod = maxTime - minTime + 2*_graphTimePadding; // includes padding specified by chart minX and maxX
-    
-    // Use zoom and pan if more than 7 days are in the entries
-    if (totalTimePeriod >= _graphVisibleDuration) {
-      // Calculate zoom to show correct timespan
-      final zoomLevel = totalTimePeriod / _graphVisibleDuration;
-      _transformationController.value = Matrix4.diagonal3Values(zoomLevel, 1.0, 1.0);  
-
-      // Calculate target position
-      final targetStartTime = maxTime - _graphVisibleDuration;
-      final translationTime = -(targetStartTime - (minTime - _graphTimePadding));
-      final translationX = (translationTime / _graphVisibleDuration * (chartWidth - _margins) - _margins/2 )/ zoomLevel;
-      _transformationController.value *= Matrix4.translationValues(translationX, 0.0, 0.0);
-      // _transformationController.value *= Matrix4.translationValues(-44.8, 0.0, 0.0);
+  @override
+  void didUpdateWidget(WeightChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.weightEntries.length != oldWidget.weightEntries.length) {
+      _initializeChartEntries();
+      _initialTransformationApplied = false;
+      _invalidateAveragesCache();
     }
   }
 
+  // --- Data Management ---
+
+  void _initializeChartEntries() {
+    if (widget.weightEntries.isEmpty) {
+      _chartEntries = [];
+      return;
+    }
+
+    final sorted = List<WeightEntry>.from(widget.weightEntries)
+      ..sort((a, b) => b.date.compareTo(a.date));
+
+    _chartEntries = sorted.take(20).toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+    
+    _invalidateAveragesCache();
+  }
+
+  void _loadMoreEntries(DateTime preserveMinDate, DateTime preserveMaxDate) {
+    final hasMoreData = _chartEntries.length < widget.weightEntries.length;
+    if (!hasMoreData || _isLoadingMore) return;
+
+    _isLoadingMore = true;
+
+    final sorted = List<WeightEntry>.from(widget.weightEntries)
+      ..sort((a, b) => b.date.compareTo(a.date));
+
+    final newCount = _chartEntries.length + 20;
+    _chartEntries = sorted.take(newCount).toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+    _invalidateAveragesCache();
+
+    _isAdjustingTransformation = true;
+    _adjustTransformationForDates(preserveMinDate, preserveMaxDate);
+    _isAdjustingTransformation = false;
+
+    setState(() {});
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _isLoadingMore = false;
+    });
+  }
+
+  // --- Running Averages Cache ---
+
+  void _invalidateAveragesCache() {
+    _cachedRunningAverages = {};
+    _cachedAverageDays = 0;
+  }
+
+  Map<DateTime, double> _getRunningAverages(int days) {
+    if (_cachedAverageDays != days || _cachedRunningAverages.isEmpty) {
+      _cachedRunningAverages = AverageCalculationService.calcDateAverages(_chartEntries, days);
+      _cachedAverageDays = days;
+    }
+    return _cachedRunningAverages;
+  }
+
+  // --- Viewport & Transformation ---
+
+  double get _contentWidth => _chartWidth - _leftTitleWidth;
+
+  ChartViewport _createViewport() {
+    final (minTime, maxTime) = _getTimeRange();
+    return ChartViewport(
+      dataMin: minTime - _graphTimePadding,
+      dataMax: maxTime + _graphTimePadding,
+      viewportWidth: _contentWidth,
+    );
+  }
+
+  void _adjustTransformationForDates(DateTime targetMinDate, DateTime targetMaxDate) {
+    final viewport = _createViewport();
+    _transformationController.value = viewport.buildTransformationForRange(
+      targetMinDate.millisecondsSinceEpoch.toDouble(),
+      targetMaxDate.millisecondsSinceEpoch.toDouble(),
+    );
+  }
+
+  void _onTransformationChanged() {
+    if (_chartEntries.isEmpty || _isAdjustingTransformation) return;
+
+    final viewport = _createViewport();
+    final (visibleMinX, visibleMaxX) = viewport.getVisibleDataRange(_transformationController);
+
+    final newVisibleMinDate = DateTime.fromMillisecondsSinceEpoch(visibleMinX.toInt());
+    final newVisibleMaxDate = DateTime.fromMillisecondsSinceEpoch(visibleMaxX.toInt());
+
+    // Check if near left edge to load more data
+    final translationX = _transformationController.value.getTranslation().x;
+    final hasMoreData = _chartEntries.length < widget.weightEntries.length;
+    final nearLeftEdge = translationX > -50;
+
+    if (nearLeftEdge && hasMoreData && !_isLoadingMore) {
+      _loadMoreEntries(newVisibleMinDate, newVisibleMaxDate);
+    }
+  }
+
+  void _updateChartTransformation(double chartWidth) {
+    _chartWidth = chartWidth;
+
+    final (minTime, maxTime) = _getTimeRange();
+    final dataMaxX = maxTime + _graphTimePadding;
+    final totalTimePeriod = maxTime - minTime + 2 * _graphTimePadding;
+
+    if (totalTimePeriod >= _graphVisibleDuration) {
+      final targetMaxDate = DateTime.fromMillisecondsSinceEpoch(dataMaxX.toInt());
+      final targetMinDate = DateTime.fromMillisecondsSinceEpoch((dataMaxX - _graphVisibleDuration).toInt());
+      _adjustTransformationForDates(targetMinDate, targetMaxDate);
+    }
+  }
+
+  // --- Data Point Calculations ---
+
+  (double, double) _getTimeRange() {
+    if (_chartEntries.isEmpty) return (0.0, 0.0);
+    final timestamps = _chartEntries.map((e) => e.date.normalizedMillis);
+    return getMinMax(timestamps);
+  }
+
+  (double, double) _getWeightRange() {
+    if (_chartEntries.isEmpty) return (0.0, 0.0);
+    final (min, max) = getMinMax(_chartEntries.map((e) => e.weight));
+    return (min - _graphWeightPadding, max + _graphWeightPadding);
+  }
 
   List<FlSpot> get _dataPoints {
-    return widget.weightEntries.map((weightEntry) {
-      // Remove the time part by creating a new DateTime with only year, month, day
-      final dateOnly = DateTime.utc(weightEntry.date.year, weightEntry.date.month, weightEntry.date.day);
-      final timestamp = dateOnly.millisecondsSinceEpoch.toDouble();
-      return FlSpot(timestamp, weightEntry.weight);
-    }).toList();
-  }
-
-  List<FlSpot> _getRunningAveragePoints(SettingsProvider settingsProvider) {
-    final runningAverages = AverageCalculationService.calcDateAverages(
-      widget.weightEntries,
-      settingsProvider.runningAverageDays,
-    );
-    return runningAverages.entries
-        .where((entry) => entry.value > 0)
-        .map((entry) {
-          final dateOnly = DateTime.utc(entry.key.year, entry.key.month, entry.key.day);
-          final timestamp = dateOnly.millisecondsSinceEpoch.toDouble();
-          return FlSpot(timestamp, entry.value);
-        })
+    return _chartEntries
+        .map((e) => FlSpot(e.date.normalizedMillis, e.weight))
         .toList();
   }
+
+  List<FlSpot> _getRunningAverageSpots(int days) {
+    return _getRunningAverages(days)
+        .entries
+        .where((entry) => entry.value > 0)
+        .map((entry) => FlSpot(entry.key.normalizedMillis, entry.value))
+        .toList();
+  }
+
+  // --- Chart Configuration ---
 
   FlTransformationConfig _getTransformationConfig() {
     return FlTransformationConfig(
@@ -95,25 +216,23 @@ class _WeightChartState extends State<WeightChart> {
     return FlGridData(
       show: true,
       horizontalInterval: 0.5,
-      verticalInterval: const Duration(days: 1).inMilliseconds.toDouble(),
+      verticalInterval: Duration.millisecondsPerDay.toDouble(),
     );
   }
 
-  List<LineChartBarData> _getLineBarsData(SettingsProvider settingsProvider) {
+  List<LineChartBarData> _getLineBarsData(int runningAverageDays) {
     return [
       // Weight measurement points
       LineChartBarData(
         spots: _dataPoints,
         dotData: FlDotData(
           show: true,
-          getDotPainter: (spot, percent, barData, index) {
-            return FlDotCirclePainter(
-              radius: 4,
-              color: Theme.of(context).colorScheme.primary,
-              strokeWidth: 2,
-              strokeColor: Colors.grey[100]!,
-            );
-          },
+          getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
+            radius: 4,
+            color: Theme.of(context).colorScheme.primary,
+            strokeWidth: 2,
+            strokeColor: Colors.grey[100]!,
+          ),
         ),
         color: Colors.transparent,
         barWidth: 0,
@@ -121,7 +240,7 @@ class _WeightChartState extends State<WeightChart> {
       ),
       // Running average curve
       LineChartBarData(
-        spots: _getRunningAveragePoints(settingsProvider),
+        spots: _getRunningAverageSpots(runningAverageDays),
         isCurved: true,
         color: Theme.of(context).colorScheme.tertiary,
         barWidth: 2,
@@ -140,7 +259,7 @@ class _WeightChartState extends State<WeightChart> {
           maxIncluded: false,
           minIncluded: false,
           reservedSize: 30,
-          getTitlesWidget: (value, meta) => _buildLeftTitle(value, meta),
+          getTitlesWidget: _buildLeftTitle,
         ),
       ),
       bottomTitles: AxisTitles(
@@ -149,8 +268,8 @@ class _WeightChartState extends State<WeightChart> {
           maxIncluded: false,
           minIncluded: false,
           reservedSize: 28,
-          interval: Duration.millisecondsPerDay.toDouble(), // 1 day in milliseconds
-          getTitlesWidget: (value, meta) => _buildBottomTitle(value, meta),
+          interval: Duration.millisecondsPerDay.toDouble(),
+          getTitlesWidget: _buildBottomTitle,
         ),
       ),
       topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -161,10 +280,7 @@ class _WeightChartState extends State<WeightChart> {
   Widget _buildLeftTitle(double value, TitleMeta meta) {
     return SideTitleWidget(
       meta: meta,
-      child: Text(
-        value.toStringAsFixed(1),
-        style: const TextStyle(fontSize: 10),
-      ),
+      child: Text(value.toStringAsFixed(1), style: const TextStyle(fontSize: 10)),
     );
   }
 
@@ -173,13 +289,10 @@ class _WeightChartState extends State<WeightChart> {
     return SideTitleWidget(
       meta: meta,
       child: Transform.rotate(
-        angle: -45 * 3.14159 / 180, // -45 degrees in radians
+        angle: -45 * 3.14159 / 180,
         child: Text(
           DateFormat('dd MMM').format(date).toLowerCase(),
-          style: const TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w500,
-          ),
+          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
         ),
       ),
     );
@@ -189,138 +302,132 @@ class _WeightChartState extends State<WeightChart> {
     return LineTouchData(
       enabled: true,
       touchTooltipData: LineTouchTooltipData(
-        getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
-          return touchedBarSpots.map((barSpot) {
-            final isRunningAverage = barSpot.barIndex == 1;
-            return LineTooltipItem(
-              '${barSpot.y.toStringAsFixed(1)} kg',
-              TextStyle(
-                color: isRunningAverage 
-                  ? Theme.of(context).colorScheme.tertiary 
+        getTooltipItems: (touchedBarSpots) => touchedBarSpots.map((barSpot) {
+          final isRunningAverage = barSpot.barIndex == 1;
+          return LineTooltipItem(
+            '${barSpot.y.toStringAsFixed(1)} kg',
+            TextStyle(
+              color: isRunningAverage
+                  ? Theme.of(context).colorScheme.tertiary
                   : Theme.of(context).colorScheme.primary,
-                fontWeight: FontWeight.bold,
-              ),
-            );
-          }).toList();
-        },
-        getTooltipColor: (LineBarSpot barSpot) => Theme.of(context).colorScheme.inversePrimary,
-        tooltipBorderRadius: BorderRadius.circular(12), 
-        tooltipPadding: EdgeInsets.all(8.0),// Add rounded corners to the tooltip
+              fontWeight: FontWeight.bold,
+            ),
+          );
+        }).toList(),
+        getTooltipColor: (_) => Theme.of(context).colorScheme.inversePrimary,
+        tooltipBorderRadius: BorderRadius.circular(12),
+        tooltipPadding: const EdgeInsets.all(8.0),
       ),
     );
   }
+
+  // --- Build ---
 
   @override
   Widget build(BuildContext context) {
     return Consumer<SettingsProvider>(
       builder: (context, settingsProvider, child) {
-        if (widget.weightEntries.isEmpty) {
+        if (_chartEntries.isEmpty) {
           return const _EmptyState();
         }
 
-        // Sort entries by date
-        final allEntries = List<WeightEntry>.from(widget.weightEntries)
-          ..sort((a, b) => a.date.compareTo(b.date));
-
-        // Calculate running averages on all entries (already returns sorted)
-        final runningAverages = AverageCalculationService.calcDateAverages(
-          allEntries,
-          settingsProvider.runningAverageDays,
-        );
-
-        // Get the latest running average for the label (from all data)
-        final latestDateNormalized = DateTime.utc(allEntries.last.date.year, allEntries.last.date.month, allEntries.last.date.day);
-        final latestRunningAverage = runningAverages[latestDateNormalized] ?? 0.0;
+        final runningAverages = _getRunningAverages(settingsProvider.runningAverageDays);
+        final latestDate = _chartEntries.last.date.dateOnly;
+        final latestRunningAverage = runningAverages[latestDate] ?? 0.0;
 
         return Card(
-      margin: const EdgeInsets.all(16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Current Average Weight Label
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                '${settingsProvider.runningAverageDays}-day Average: ${latestRunningAverage.toStringAsFixed(1)} ${settingsProvider.weightUnit}',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.tertiary,
+          margin: const EdgeInsets.all(16),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _AverageLabel(
+                  days: settingsProvider.runningAverageDays,
+                  average: latestRunningAverage,
+                  unit: settingsProvider.weightUnit,
                 ),
-                textAlign: TextAlign.center,
-              ),
+                _buildChart(settingsProvider),
+                const SizedBox(height: 16),
+                _ChartLegend(settingsProvider: settingsProvider),
+              ],
             ),
-            // Interactive Chart with zoom and pan
-            LayoutBuilder(
-              builder: (context, constraints) {
-                // Update the stored chart width with the actual available width
-                _chartWidth = constraints.maxWidth;
-                
-                // Calculate transformation now that we have the actual width
-                _updateChartTransformation(_chartWidth);
-                
-                final (minY, maxY) = _getWeightRange(widget.weightEntries);
-                final (minTime, maxTime) = _getTimeRange(widget.weightEntries);
-                final timeRange = maxTime - minTime;
-                
-                // Set minX depending on wheter measurement timerange is below _graphVisibleDuration
-                final shouldSetXBounds = timeRange < _graphVisibleDuration;
-                
-                return SizedBox(
-                  width: double.infinity,
-                  height: 200,
-                  child: LineChart(
-                    transformationConfig: _getTransformationConfig(),
-                    LineChartData(
-                      borderData: FlBorderData(show: true),
-                      minY: minY,
-                      maxY: maxY,
-                      minX: shouldSetXBounds ? maxTime - _graphVisibleDuration - _graphTimePadding : minTime - _graphTimePadding,
-                      maxX: maxTime + _graphTimePadding,
-                      gridData: _getGridData(),
-                      lineBarsData: _getLineBarsData(settingsProvider),
-                      titlesData: _getTitlesData(),
-                      lineTouchData: _getLineTouchData(),
-                    ),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-            _ChartLegend(settingsProvider: settingsProvider),
-          ],
-        ),
-      ),
-    );
+          ),
+        );
       },
     );
   }
 
-  (double min, double max) _getWeightRange(List<WeightEntry> entries) {
-    if (entries.isEmpty) return (0.0, 0.0);
-    
-    final weights = entries.map((e) => e.weight).toList();
-    final min = weights.reduce((a, b) => a < b ? a : b);
-    final max = weights.reduce((a, b) => a > b ? a : b);
-    
-    return (min - _graphWeightPadding, max + _graphWeightPadding);
-  }
+  Widget _buildChart(SettingsProvider settingsProvider) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        _chartWidth = constraints.maxWidth;
 
-  (double min, double max) _getTimeRange(List<WeightEntry> entries) {
-    if (entries.isEmpty) return (0.0, 0.0);
-    
-    final timestamps = entries.map((e) {
-      final dateOnly = DateTime.utc(e.date.year, e.date.month, e.date.day);
-      return dateOnly.millisecondsSinceEpoch.toDouble();
-    }).toList();
-    
-    final min = timestamps.reduce((a, b) => a < b ? a : b);
-    final max = timestamps.reduce((a, b) => a > b ? a : b);
-    
-    return (min, max);
+        if (!_initialTransformationApplied) {
+          _initialTransformationApplied = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _updateChartTransformation(_chartWidth);
+          });
+        }
+
+        final (minY, maxY) = _getWeightRange();
+        final (minTime, maxTime) = _getTimeRange();
+        final timeRange = maxTime - minTime;
+        final shouldSetXBounds = timeRange < _graphVisibleDuration;
+
+        return SizedBox(
+          width: double.infinity,
+          height: 200,
+          child: LineChart(
+            transformationConfig: _getTransformationConfig(),
+            LineChartData(
+              borderData: FlBorderData(show: true),
+              minY: minY,
+              maxY: maxY,
+              minX: shouldSetXBounds
+                  ? maxTime - _graphVisibleDuration - _graphTimePadding
+                  : minTime - _graphTimePadding,
+              maxX: maxTime + _graphTimePadding,
+              gridData: _getGridData(),
+              lineBarsData: _getLineBarsData(settingsProvider.runningAverageDays),
+              titlesData: _getTitlesData(),
+              lineTouchData: _getLineTouchData(),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// --- Supporting Widgets ---
+
+class _AverageLabel extends StatelessWidget {
+  final int days;
+  final double average;
+  final String unit;
+
+  const _AverageLabel({
+    required this.days,
+    required this.average,
+    required this.unit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        '$days-day Average: ${average.toStringAsFixed(1)} $unit',
+        style: TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          color: Theme.of(context).colorScheme.tertiary,
+        ),
+        textAlign: TextAlign.center,
+      ),
+    );
   }
 }
 
@@ -338,7 +445,7 @@ class _EmptyState extends StatelessWidget {
             'No weight data available.\nAdd some weight entries to see the chart.',
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 16, 
+              fontSize: 16,
               color: Theme.of(context).colorScheme.onSecondary,
             ),
           ),
@@ -357,27 +464,38 @@ class _ChartLegend extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primary,
-            shape: BoxShape.circle,
-          ),
+        _LegendItem(
+          color: Theme.of(context).colorScheme.primary,
+          label: 'Measurements',
         ),
-        const SizedBox(width: 8),
-        const Text('Measurements'),
         const SizedBox(width: 24),
+        _LegendItem(
+          color: Theme.of(context).colorScheme.tertiary,
+          label: '${settingsProvider.runningAverageDays}-day Average',
+        ),
+      ],
+    );
+  }
+}
+
+class _LegendItem extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _LegendItem({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
         Container(
           width: 12,
           height: 12,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.tertiary,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 8),
-        Text('${settingsProvider.runningAverageDays}-day Average'),
+        Text(label),
       ],
     );
   }
