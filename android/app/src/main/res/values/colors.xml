@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Cream background color matching the app icon -->
+    <color name="cream_background">#FBE9CE</color>
+</resources>
+

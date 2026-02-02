@@ -1,0 +1,8 @@
+# Android Signing Configuration Template
+# Copy this file to key.properties and fill in your actual values
+# NEVER commit the actual key.properties file to version control!
+
+storePassword=your_keystore_password_here
+keyPassword=your_key_password_here
+keyAlias=weight-tracking-key
+storeFile=weight-tracking-key.jks
