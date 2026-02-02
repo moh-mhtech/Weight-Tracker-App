@@ -34,6 +34,9 @@ class _WeightChartState extends State<WeightChart> {
   Map<DateTime, double> _cachedRunningAverages = {};
   int _cachedAverageDays = 0;
 
+  // Visible time range for dynamic tick intervals
+  double _visibleTimeRange = _graphVisibleDuration;
+
   @override
   void initState() {
     super.initState();
@@ -143,6 +146,7 @@ class _WeightChartState extends State<WeightChart> {
 
     final viewport = _createViewport();
     final (visibleMinX, visibleMaxX) = viewport.getVisibleDataRange(_transformationController);
+    final newVisibleRange = visibleMaxX - visibleMinX;
 
     final newVisibleMinDate = DateTime.fromMillisecondsSinceEpoch(visibleMinX.toInt());
     final newVisibleMaxDate = DateTime.fromMillisecondsSinceEpoch(visibleMaxX.toInt());
@@ -154,6 +158,16 @@ class _WeightChartState extends State<WeightChart> {
 
     if (nearLeftEdge && hasMoreData && !_isLoadingMore) {
       _loadMoreEntries(newVisibleMinDate, newVisibleMaxDate);
+    }
+
+    // Update visible range and rebuild only if tick interval tier changed
+    final oldInterval = calculateTimeTickInterval(_visibleTimeRange);
+    final newInterval = calculateTimeTickInterval(newVisibleRange);
+
+    if (oldInterval != newInterval) {
+      setState(() => _visibleTimeRange = newVisibleRange);
+    } else {
+      _visibleTimeRange = newVisibleRange;
     }
   }
 
@@ -213,10 +227,14 @@ class _WeightChartState extends State<WeightChart> {
   }
 
   FlGridData _getGridData() {
+    final timeInterval = calculateTimeTickInterval(_visibleTimeRange);
+    final (minY, maxY) = _getWeightRange();
+    final (_, weightGridInterval) = calculateWeightIntervals(minY, maxY);
+
     return FlGridData(
       show: true,
-      horizontalInterval: 0.5,
-      verticalInterval: Duration.millisecondsPerDay.toDouble(),
+      horizontalInterval: weightGridInterval,
+      verticalInterval: timeInterval,
     );
   }
 
@@ -252,6 +270,10 @@ class _WeightChartState extends State<WeightChart> {
   }
 
   FlTitlesData _getTitlesData() {
+    final timeInterval = calculateTimeTickInterval(_visibleTimeRange);
+    final (minY, maxY) = _getWeightRange();
+    final (weightTickInterval, _) = calculateWeightIntervals(minY, maxY);
+
     return FlTitlesData(
       leftTitles: AxisTitles(
         sideTitles: SideTitles(
@@ -259,6 +281,7 @@ class _WeightChartState extends State<WeightChart> {
           maxIncluded: false,
           minIncluded: false,
           reservedSize: 30,
+          interval: weightTickInterval,
           getTitlesWidget: _buildLeftTitle,
         ),
       ),
@@ -268,7 +291,7 @@ class _WeightChartState extends State<WeightChart> {
           maxIncluded: false,
           minIncluded: false,
           reservedSize: 28,
-          interval: Duration.millisecondsPerDay.toDouble(),
+          interval: timeInterval,
           getTitlesWidget: _buildBottomTitle,
         ),
       ),
