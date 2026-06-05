@@ -146,3 +146,30 @@ double calculateTimeTickInterval(double visibleRangeMs) {
   
   return (niceInterval, niceInterval / 2);
 }
+
+/// Returns chart X-axis bounds shared by LineChart and ChartViewport.
+(double minX, double maxX) getChartXBounds({
+  required double minTime,
+  required double maxTime,
+  required double visibleDuration,
+  required double timePadding,
+}) {
+  final timeRange = maxTime - minTime;
+  final minX = timeRange < visibleDuration
+      ? maxTime - visibleDuration - timePadding
+      : minTime - timePadding;
+  final maxX = maxTime + timePadding;
+  return (minX, maxX);
+}
+
+/// Tracks the leftmost date scrolled to for Y-axis scaling.
+/// Only moves earlier; panning back toward recent dates does not shrink it.
+double updateMinViewedDateMs({
+  required double visibleMinMs,
+  double? currentMinViewedMs,
+}) {
+  if (currentMinViewedMs == null || visibleMinMs < currentMinViewedMs) {
+    return visibleMinMs;
+  }
+  return currentMinViewedMs;
+}

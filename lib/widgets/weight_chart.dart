@@ -7,10 +7,11 @@ import '../providers/settings_provider.dart';
 import '../services/average_calculation_service.dart';
 import '../services/chart_viewport_service.dart';
 
-// Chart configuration constants
+// 11 days of data + 12h padding on each end = 12 calendar days on the axis
 const double _graphTimePadding = Duration.millisecondsPerDay / 2;
 const double _graphWeightPadding = 0.2;
-const double _graphVisibleDuration = 10 * Duration.millisecondsPerDay + 2 * _graphTimePadding;
+const double _graphVisibleDuration =
+    10 * Duration.millisecondsPerDay + 2 * _graphTimePadding;
 const double _leftTitleWidth = 28.0;
 
 class WeightChart extends StatefulWidget {
@@ -26,15 +27,16 @@ class _WeightChartState extends State<WeightChart> {
   late TransformationController _transformationController;
   double _chartWidth = 280.0;
   bool _initialTransformationApplied = false;
-  List<WeightEntry> _chartEntries = [];
-  bool _isLoadingMore = false;
   bool _isAdjustingTransformation = false;
 
-  // Cached running averages - computed once per build
+  double? _weightMinY;
+  double? _weightMaxY;
+  double? _minViewedDateMs;
+  int _runningAverageDays = 5;
+
   Map<DateTime, double> _cachedRunningAverages = {};
   int _cachedAverageDays = 0;
 
-  // Visible time range for dynamic tick intervals
   double _visibleTimeRange = _graphVisibleDuration;
 
   @override
@@ -42,7 +44,6 @@ class _WeightChartState extends State<WeightChart> {
     super.initState();
     _transformationController = TransformationController();
     _transformationController.addListener(_onTransformationChanged);
-    _initializeChartEntries();
   }
 
   @override
@@ -56,56 +57,19 @@ class _WeightChartState extends State<WeightChart> {
   void didUpdateWidget(WeightChart oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.weightEntries.length != oldWidget.weightEntries.length) {
-      _initializeChartEntries();
       _initialTransformationApplied = false;
+      _weightMinY = null;
+      _weightMaxY = null;
+      _minViewedDateMs = null;
       _invalidateAveragesCache();
     }
   }
 
-  // --- Data Management ---
-
-  void _initializeChartEntries() {
-    if (widget.weightEntries.isEmpty) {
-      _chartEntries = [];
-      return;
-    }
-
-    final sorted = List<WeightEntry>.from(widget.weightEntries)
-      ..sort((a, b) => b.date.compareTo(a.date));
-
-    _chartEntries = sorted.take(20).toList()
+  List<WeightEntry> get _sortedEntries {
+    if (widget.weightEntries.isEmpty) return [];
+    return List<WeightEntry>.from(widget.weightEntries)
       ..sort((a, b) => a.date.compareTo(b.date));
-    
-    _invalidateAveragesCache();
   }
-
-  void _loadMoreEntries(DateTime preserveMinDate, DateTime preserveMaxDate) {
-    final hasMoreData = _chartEntries.length < widget.weightEntries.length;
-    if (!hasMoreData || _isLoadingMore) return;
-
-    _isLoadingMore = true;
-
-    final sorted = List<WeightEntry>.from(widget.weightEntries)
-      ..sort((a, b) => b.date.compareTo(a.date));
-
-    final newCount = _chartEntries.length + 20;
-    _chartEntries = sorted.take(newCount).toList()
-      ..sort((a, b) => a.date.compareTo(b.date));
-
-    _invalidateAveragesCache();
-
-    _isAdjustingTransformation = true;
-    _adjustTransformationForDates(preserveMinDate, preserveMaxDate);
-    _isAdjustingTransformation = false;
-
-    setState(() {});
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _isLoadingMore = false;
-    });
-  }
-
-  // --- Running Averages Cache ---
 
   void _invalidateAveragesCache() {
     _cachedRunningAverages = {};
@@ -114,57 +78,112 @@ class _WeightChartState extends State<WeightChart> {
 
   Map<DateTime, double> _getRunningAverages(int days) {
     if (_cachedAverageDays != days || _cachedRunningAverages.isEmpty) {
-      _cachedRunningAverages = AverageCalculationService.calcDateAverages(_chartEntries, days);
+      _cachedRunningAverages =
+          AverageCalculationService.calcDateAverages(_sortedEntries, days);
       _cachedAverageDays = days;
     }
     return _cachedRunningAverages;
   }
 
-  // --- Viewport & Transformation ---
-
   double get _contentWidth => _chartWidth - _leftTitleWidth;
 
+  (double, double) _getFullDataTimeRange() {
+    if (_sortedEntries.isEmpty) return (0.0, 0.0);
+    final timestamps = _sortedEntries.map((e) => e.date.normalizedMillis);
+    return getMinMax(timestamps);
+  }
+
+  double get _latestEntryMs => _sortedEntries.last.date.normalizedMillis;
+
+  (double, double) _getChartXBounds() {
+    final (minTime, maxTime) = _getFullDataTimeRange();
+    return getChartXBounds(
+      minTime: minTime,
+      maxTime: maxTime,
+      visibleDuration: _graphVisibleDuration,
+      timePadding: _graphTimePadding,
+    );
+  }
+
   ChartViewport _createViewport() {
-    final (minTime, maxTime) = _getTimeRange();
+    final (minX, maxX) = _getChartXBounds();
     return ChartViewport(
-      dataMin: minTime - _graphTimePadding,
-      dataMax: maxTime + _graphTimePadding,
+      dataMin: minX,
+      dataMax: maxX,
       viewportWidth: _contentWidth,
     );
   }
 
-  void _adjustTransformationForDates(DateTime targetMinDate, DateTime targetMaxDate) {
+  void _adjustTransformationForRange(double targetMinMs, double targetMaxMs) {
     final viewport = _createViewport();
     _transformationController.value = viewport.buildTransformationForRange(
-      targetMinDate.millisecondsSinceEpoch.toDouble(),
-      targetMaxDate.millisecondsSinceEpoch.toDouble(),
+      targetMinMs,
+      targetMaxMs,
     );
   }
 
-  void _onTransformationChanged() {
-    if (_chartEntries.isEmpty || _isAdjustingTransformation) return;
+  (double, double) _computeWeightRangeForDateWindow(
+    double windowMinMs,
+    double windowMaxMs,
+  ) {
+    final values = <double>[];
 
-    final viewport = _createViewport();
-    final (visibleMinX, visibleMaxX) = viewport.getVisibleDataRange(_transformationController);
-    final newVisibleRange = visibleMaxX - visibleMinX;
-
-    final newVisibleMinDate = DateTime.fromMillisecondsSinceEpoch(visibleMinX.toInt());
-    final newVisibleMaxDate = DateTime.fromMillisecondsSinceEpoch(visibleMaxX.toInt());
-
-    // Check if near left edge to load more data
-    final translationX = _transformationController.value.getTranslation().x;
-    final hasMoreData = _chartEntries.length < widget.weightEntries.length;
-    final nearLeftEdge = translationX > -50;
-
-    if (nearLeftEdge && hasMoreData && !_isLoadingMore) {
-      _loadMoreEntries(newVisibleMinDate, newVisibleMaxDate);
+    for (final entry in _sortedEntries) {
+      final ms = entry.date.normalizedMillis;
+      if (ms >= windowMinMs && ms <= windowMaxMs) {
+        values.add(entry.weight);
+      }
     }
 
-    // Update visible range and rebuild only if tick interval tier changed
+    for (final averageEntry in _getRunningAverages(_runningAverageDays).entries) {
+      if (averageEntry.value <= 0) continue;
+      final ms = averageEntry.key.normalizedMillis;
+      if (ms >= windowMinMs && ms <= windowMaxMs) {
+        values.add(averageEntry.value);
+      }
+    }
+
+    if (values.isEmpty) return (0.0, 0.0);
+    final (min, max) = getMinMax(values);
+    return (min - _graphWeightPadding, max + _graphWeightPadding);
+  }
+
+  bool _applyWeightRangeForDateWindow(double windowMinMs, double windowMaxMs) {
+    final (newMin, newMax) =
+        _computeWeightRangeForDateWindow(windowMinMs, windowMaxMs);
+    if (_weightMinY == newMin && _weightMaxY == newMax) return false;
+    _weightMinY = newMin;
+    _weightMaxY = newMax;
+    return true;
+  }
+
+  void _recalculateWeightRangeFromViewport() {
+    if (_sortedEntries.isEmpty || _minViewedDateMs == null) return;
+    _applyWeightRangeForDateWindow(_minViewedDateMs!, _latestEntryMs);
+  }
+
+  void _onTransformationChanged() {
+    if (_sortedEntries.isEmpty || _isAdjustingTransformation) return;
+
+    final viewport = _createViewport();
+    final (visibleMinX, visibleMaxX) =
+        viewport.getVisibleDataRange(_transformationController);
+    final newVisibleRange = visibleMaxX - visibleMinX;
+
+    _minViewedDateMs = updateMinViewedDateMs(
+      visibleMinMs: visibleMinX,
+      currentMinViewedMs: _minViewedDateMs,
+    );
+
+    final weightRangeChanged = _applyWeightRangeForDateWindow(
+      _minViewedDateMs!,
+      _latestEntryMs,
+    );
+
     final oldInterval = calculateTimeTickInterval(_visibleTimeRange);
     final newInterval = calculateTimeTickInterval(newVisibleRange);
 
-    if (oldInterval != newInterval) {
+    if (weightRangeChanged || oldInterval != newInterval) {
       setState(() => _visibleTimeRange = newVisibleRange);
     } else {
       _visibleTimeRange = newVisibleRange;
@@ -174,33 +193,38 @@ class _WeightChartState extends State<WeightChart> {
   void _updateChartTransformation(double chartWidth) {
     _chartWidth = chartWidth;
 
-    final (minTime, maxTime) = _getTimeRange();
+    final (minTime, maxTime) = _getFullDataTimeRange();
+    if (_sortedEntries.isEmpty) return;
+
     final dataMaxX = maxTime + _graphTimePadding;
     final totalTimePeriod = maxTime - minTime + 2 * _graphTimePadding;
 
     if (totalTimePeriod >= _graphVisibleDuration) {
-      final targetMaxDate = DateTime.fromMillisecondsSinceEpoch(dataMaxX.toInt());
-      final targetMinDate = DateTime.fromMillisecondsSinceEpoch((dataMaxX - _graphVisibleDuration).toInt());
-      _adjustTransformationForDates(targetMinDate, targetMaxDate);
+      final targetMaxMs = dataMaxX;
+      final targetMinMs = dataMaxX - _graphVisibleDuration;
+
+      _isAdjustingTransformation = true;
+      _adjustTransformationForRange(targetMinMs, targetMaxMs);
+      _isAdjustingTransformation = false;
+
+      _minViewedDateMs = targetMinMs;
+      _applyWeightRangeForDateWindow(targetMinMs, maxTime);
     }
   }
 
-  // --- Data Point Calculations ---
-
-  (double, double) _getTimeRange() {
-    if (_chartEntries.isEmpty) return (0.0, 0.0);
-    final timestamps = _chartEntries.map((e) => e.date.normalizedMillis);
-    return getMinMax(timestamps);
-  }
-
   (double, double) _getWeightRange() {
-    if (_chartEntries.isEmpty) return (0.0, 0.0);
-    final (min, max) = getMinMax(_chartEntries.map((e) => e.weight));
-    return (min - _graphWeightPadding, max + _graphWeightPadding);
+    if (_weightMinY != null && _weightMaxY != null) {
+      return (_weightMinY!, _weightMaxY!);
+    }
+
+    if (_sortedEntries.isEmpty) return (0.0, 0.0);
+    final latestMs = _latestEntryMs;
+    final initialMinMs = latestMs + _graphTimePadding - _graphVisibleDuration;
+    return _computeWeightRangeForDateWindow(initialMinMs, latestMs);
   }
 
   List<FlSpot> get _dataPoints {
-    return _chartEntries
+    return _sortedEntries
         .map((e) => FlSpot(e.date.normalizedMillis, e.weight))
         .toList();
   }
@@ -212,8 +236,6 @@ class _WeightChartState extends State<WeightChart> {
         .map((entry) => FlSpot(entry.key.normalizedMillis, entry.value))
         .toList();
   }
-
-  // --- Chart Configuration ---
 
   FlTransformationConfig _getTransformationConfig() {
     return FlTransformationConfig(
@@ -240,7 +262,6 @@ class _WeightChartState extends State<WeightChart> {
 
   List<LineChartBarData> _getLineBarsData(int runningAverageDays) {
     return [
-      // Weight measurement points
       LineChartBarData(
         spots: _dataPoints,
         dotData: FlDotData(
@@ -256,7 +277,6 @@ class _WeightChartState extends State<WeightChart> {
         barWidth: 0,
         belowBarData: BarAreaData(show: false),
       ),
-      // Running average curve
       LineChartBarData(
         spots: _getRunningAverageSpots(runningAverageDays),
         isCurved: true,
@@ -344,18 +364,16 @@ class _WeightChartState extends State<WeightChart> {
     );
   }
 
-  // --- Build ---
-
   @override
   Widget build(BuildContext context) {
     return Consumer<SettingsProvider>(
       builder: (context, settingsProvider, child) {
-        if (_chartEntries.isEmpty) {
+        if (_sortedEntries.isEmpty) {
           return const _EmptyState();
         }
 
         final runningAverages = _getRunningAverages(settingsProvider.runningAverageDays);
-        final latestDate = _chartEntries.last.date.dateOnly;
+        final latestDate = _sortedEntries.last.date.dateOnly;
         final latestRunningAverage = runningAverages[latestDate] ?? 0.0;
 
         return Card(
@@ -386,6 +404,13 @@ class _WeightChartState extends State<WeightChart> {
       builder: (context, constraints) {
         _chartWidth = constraints.maxWidth;
 
+        final days = settingsProvider.runningAverageDays;
+        if (days != _runningAverageDays) {
+          _runningAverageDays = days;
+          _invalidateAveragesCache();
+          _recalculateWeightRangeFromViewport();
+        }
+
         if (!_initialTransformationApplied) {
           _initialTransformationApplied = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -394,9 +419,7 @@ class _WeightChartState extends State<WeightChart> {
         }
 
         final (minY, maxY) = _getWeightRange();
-        final (minTime, maxTime) = _getTimeRange();
-        final timeRange = maxTime - minTime;
-        final shouldSetXBounds = timeRange < _graphVisibleDuration;
+        final (minX, maxX) = _getChartXBounds();
 
         return SizedBox(
           width: double.infinity,
@@ -407,10 +430,8 @@ class _WeightChartState extends State<WeightChart> {
               borderData: FlBorderData(show: true),
               minY: minY,
               maxY: maxY,
-              minX: shouldSetXBounds
-                  ? maxTime - _graphVisibleDuration - _graphTimePadding
-                  : minTime - _graphTimePadding,
-              maxX: maxTime + _graphTimePadding,
+              minX: minX,
+              maxX: maxX,
               gridData: _getGridData(),
               lineBarsData: _getLineBarsData(settingsProvider.runningAverageDays),
               titlesData: _getTitlesData(),
@@ -422,8 +443,6 @@ class _WeightChartState extends State<WeightChart> {
     );
   }
 }
-
-// --- Supporting Widgets ---
 
 class _AverageLabel extends StatelessWidget {
   final int days;

@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:weight_graph/models/weight_entry.dart';
 import 'package:weight_graph/providers/settings_provider.dart';
 import 'package:weight_graph/widgets/weight_chart.dart';
@@ -11,6 +12,7 @@ void main() {
     late SettingsProvider settingsProvider;
 
     setUp(() {
+      SharedPreferences.setMockInitialValues({});
       settingsProvider = SettingsProvider();
     });
 
@@ -164,7 +166,7 @@ void main() {
       expect(find.text('5-day Average: 70.5 kg'), findsOneWidget);
 
       // Act - Change running average days
-      settingsProvider.setRunningAverageDays(7);
+      await settingsProvider.setRunningAverageDays(7);
       await tester.pumpAndSettle();
 
       // Assert updated state
