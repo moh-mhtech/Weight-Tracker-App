@@ -64,6 +64,19 @@ flutter run -d macos    # macOS
 flutter run -d linux    # Linux
 ```
 
+4. Build the app:
+```bash
+# Dev
+flutter build apk --debug
+
+# Release (Including fast copy)
+flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons; Copy-Item build\app\outputs\flutter-apk\app-release.apk "C:\Users\mlhil\Dropbox\Apps\weightgraph.apk"
+
+# Bundle
+flutter build appbundle --release
+```
+
+
 ## Project Structure
 
 ```
