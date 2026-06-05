@@ -1,14 +1,9 @@
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../models/weight_entry.dart';
 import 'csv_service.dart';
-import 'mobile_file_writer.dart'
-    if (dart.library.html) 'mobile_file_writer_stub.dart';
 
 class ImportResult {
   final List<WeightEntry>? entries;
@@ -70,26 +65,11 @@ class ImportExportService {
   }) async {
     final bytes = utf8.encode(content);
 
-    if (kIsWeb ||
-        defaultTargetPlatform == TargetPlatform.windows ||
-        defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.linux) {
-      await FilePicker.platform.saveFile(
-        fileName: fileName,
-        bytes: bytes,
-        type: FileType.custom,
-        allowedExtensions: ['csv'],
-      );
-      return;
-    }
-
-    final tempDir = await getTemporaryDirectory();
-    final filePath = await writeCsvToTempDir(tempDir.path, fileName, bytes);
-
-    await Share.shareXFiles(
-      [XFile(filePath, mimeType: 'text/csv', name: fileName)],
-      subject: 'Weight data export',
-      text: 'Weight data export',
+    await FilePicker.platform.saveFile(
+      fileName: fileName,
+      bytes: bytes,
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
     );
   }
 }
