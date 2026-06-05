@@ -209,10 +209,31 @@ class _WeightChartState extends State<WeightChart> {
   }
 
   List<FlSpot> _getRunningAverageSpots(int days) {
-    return _getRunningAverages(days)
+    final spots = _getRunningAverages(days)
         .entries
         .where((entry) => entry.value > 0)
         .map((entry) => FlSpot(entry.key.normalizedMillis, entry.value))
+        .toList();
+    spots.sort((a, b) => a.x.compareTo(b.x));
+    return spots;
+  }
+
+  List<LineChartBarData> _getRunningAverageBars(int days) {
+    final segments = splitSpotsByDayGaps(_getRunningAverageSpots(days));
+    final color = Theme.of(context).colorScheme.tertiary;
+
+    return segments
+        .map(
+          (spots) => LineChartBarData(
+            spots: spots,
+            isCurved: true,
+            color: color,
+            barWidth: 2,
+            isStrokeCapRound: true,
+            dotData: const FlDotData(show: false),
+            belowBarData: BarAreaData(show: false),
+          ),
+        )
         .toList();
   }
 
@@ -256,15 +277,7 @@ class _WeightChartState extends State<WeightChart> {
         barWidth: 0,
         belowBarData: BarAreaData(show: false),
       ),
-      LineChartBarData(
-        spots: _getRunningAverageSpots(runningAverageDays),
-        isCurved: true,
-        color: Theme.of(context).colorScheme.tertiary,
-        barWidth: 2,
-        isStrokeCapRound: true,
-        dotData: const FlDotData(show: false),
-        belowBarData: BarAreaData(show: false),
-      ),
+      ..._getRunningAverageBars(runningAverageDays),
     ];
   }
 
@@ -325,7 +338,7 @@ class _WeightChartState extends State<WeightChart> {
       enabled: true,
       touchTooltipData: LineTouchTooltipData(
         getTooltipItems: (touchedBarSpots) => touchedBarSpots.map((barSpot) {
-          final isRunningAverage = barSpot.barIndex == 1;
+          final isRunningAverage = barSpot.barIndex >= 1;
           return LineTooltipItem(
             '${barSpot.y.toStringAsFixed(1)} kg',
             TextStyle(

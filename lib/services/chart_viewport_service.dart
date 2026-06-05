@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 /// Normalizes a DateTime to midnight UTC (removes time component).
@@ -104,4 +105,32 @@ double updateMinViewedDateMs({
     return visibleMinMs;
   }
   return currentMinViewedMs;
+}
+
+/// Splits chart spots into separate segments when consecutive points are more
+/// than one calendar day apart.
+List<List<FlSpot>> splitSpotsByDayGaps(List<FlSpot> spots) {
+  if (spots.isEmpty) return [];
+
+  final sortedSpots = List<FlSpot>.from(spots)
+    ..sort((a, b) => a.x.compareTo(b.x));
+
+  final segments = <List<FlSpot>>[];
+  var currentSegment = <FlSpot>[sortedSpots.first];
+
+  for (int i = 1; i < sortedSpots.length; i++) {
+    final previous = sortedSpots[i - 1];
+    final current = sortedSpots[i];
+    final gapMs = current.x - previous.x;
+
+    if (gapMs > Duration.millisecondsPerDay) {
+      segments.add(currentSegment);
+      currentSegment = [current];
+    } else {
+      currentSegment.add(current);
+    }
+  }
+
+  segments.add(currentSegment);
+  return segments;
 }

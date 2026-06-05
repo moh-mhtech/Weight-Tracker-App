@@ -270,6 +270,78 @@ void main() {
         expect(result.length, equals(1)); // Only Jan 1
         expect(result[DateTime.utc(2024, 1, 1)], equals(70.5)); // (70.0 + 70.5 + 71.0) / 3
       });
+
+      test('splits clusters when gap between entry dates exceeds averaging period', () {
+        final entries = [
+          WeightEntry(weight: 70.0, date: DateTime.utc(2024, 1, 1)),
+          WeightEntry(weight: 72.0, date: DateTime.utc(2024, 1, 10)),
+        ];
+        const averagingPeriod = 5;
+
+        final result = AverageCalculationService.calcDateAverages(entries, averagingPeriod);
+
+        expect(result.length, equals(2));
+        expect(result.containsKey(DateTime.utc(2024, 1, 1)), isTrue);
+        expect(result.containsKey(DateTime.utc(2024, 1, 10)), isTrue);
+        expect(result.containsKey(DateTime.utc(2024, 1, 2)), isFalse);
+        expect(result.containsKey(DateTime.utc(2024, 1, 9)), isFalse);
+      });
+
+      test('forms three sections for multi-cluster dataset with short intra-cluster gap', () {
+        final entries = [
+          WeightEntry(weight: 70.0, date: DateTime.utc(2024, 1, 1)),
+          WeightEntry(weight: 70.0, date: DateTime.utc(2024, 1, 2)),
+          WeightEntry(weight: 70.0, date: DateTime.utc(2024, 1, 3)),
+          WeightEntry(weight: 71.0, date: DateTime.utc(2024, 1, 11)),
+          WeightEntry(weight: 71.0, date: DateTime.utc(2024, 1, 12)),
+          WeightEntry(weight: 71.0, date: DateTime.utc(2024, 1, 13)),
+          WeightEntry(weight: 72.0, date: DateTime.utc(2024, 1, 21)),
+          WeightEntry(weight: 72.0, date: DateTime.utc(2024, 1, 22)),
+          WeightEntry(weight: 72.0, date: DateTime.utc(2024, 1, 23)),
+          WeightEntry(weight: 73.0, date: DateTime.utc(2024, 1, 26)),
+          WeightEntry(weight: 73.0, date: DateTime.utc(2024, 1, 27)),
+        ];
+        const averagingPeriod = 5;
+
+        final result = AverageCalculationService.calcDateAverages(entries, averagingPeriod);
+
+        expect(result.length, equals(13));
+
+        for (int day = 1; day <= 3; day++) {
+          expect(
+            result.containsKey(DateTime.utc(2024, 1, day)),
+            isTrue,
+            reason: 'section 1 should include 1/$day',
+          );
+        }
+
+        for (int day = 11; day <= 13; day++) {
+          expect(
+            result.containsKey(DateTime.utc(2024, 1, day)),
+            isTrue,
+            reason: 'section 2 should include $day/1',
+          );
+        }
+
+        for (int day = 21; day <= 27; day++) {
+          expect(
+            result.containsKey(DateTime.utc(2024, 1, day)),
+            isTrue,
+            reason: 'section 3 should include $day/1',
+          );
+        }
+
+        for (int day = 4; day <= 10; day++) {
+          expect(result.containsKey(DateTime.utc(2024, 1, day)), isFalse);
+        }
+
+        for (int day = 14; day <= 20; day++) {
+          expect(result.containsKey(DateTime.utc(2024, 1, day)), isFalse);
+        }
+
+        expect(result[DateTime.utc(2024, 1, 24)], equals(72.0));
+        expect(result[DateTime.utc(2024, 1, 25)], equals(72.0));
+      });
     });
   });
 }
