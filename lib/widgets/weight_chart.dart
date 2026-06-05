@@ -6,13 +6,13 @@ import '../models/weight_entry.dart';
 import '../providers/settings_provider.dart';
 import '../services/average_calculation_service.dart';
 import '../services/chart_viewport_service.dart';
+import '../fl_chart_viewport/fl_chart_viewport.dart';
 
 // 11 days of data + 12h padding on each end = 12 calendar days on the axis
 const double _graphTimePadding = Duration.millisecondsPerDay / 2;
 const double _graphWeightPadding = 0.2;
 const double _graphVisibleDuration =
     10 * Duration.millisecondsPerDay + 2 * _graphTimePadding;
-const double _leftTitleWidth = 28.0;
 
 class WeightChart extends StatefulWidget {
   final List<WeightEntry> weightEntries;
@@ -24,10 +24,8 @@ class WeightChart extends StatefulWidget {
 }
 
 class _WeightChartState extends State<WeightChart> {
-  late TransformationController _transformationController;
-  double _chartWidth = 280.0;
+  late AxisChartViewController _viewController;
   bool _initialTransformationApplied = false;
-  bool _isAdjustingTransformation = false;
 
   double? _weightMinY;
   double? _weightMaxY;
@@ -42,14 +40,14 @@ class _WeightChartState extends State<WeightChart> {
   @override
   void initState() {
     super.initState();
-    _transformationController = TransformationController();
-    _transformationController.addListener(_onTransformationChanged);
+    _viewController = AxisChartViewController(scaleAxis: FlScaleAxis.horizontal);
+    _viewController.transformationController.addListener(_onTransformationChanged);
   }
 
   @override
   void dispose() {
-    _transformationController.removeListener(_onTransformationChanged);
-    _transformationController.dispose();
+    _viewController.transformationController.removeListener(_onTransformationChanged);
+    _viewController.dispose();
     super.dispose();
   }
 
@@ -85,8 +83,6 @@ class _WeightChartState extends State<WeightChart> {
     return _cachedRunningAverages;
   }
 
-  double get _contentWidth => _chartWidth - _leftTitleWidth;
-
   (double, double) _getFullDataTimeRange() {
     if (_sortedEntries.isEmpty) return (0.0, 0.0);
     final timestamps = _sortedEntries.map((e) => e.date.normalizedMillis);
@@ -105,21 +101,9 @@ class _WeightChartState extends State<WeightChart> {
     );
   }
 
-  ChartViewport _createViewport() {
+  AxisChartDomain _getChartDomain(double minY, double maxY) {
     final (minX, maxX) = _getChartXBounds();
-    return ChartViewport(
-      dataMin: minX,
-      dataMax: maxX,
-      viewportWidth: _contentWidth,
-    );
-  }
-
-  void _adjustTransformationForRange(double targetMinMs, double targetMaxMs) {
-    final viewport = _createViewport();
-    _transformationController.value = viewport.buildTransformationForRange(
-      targetMinMs,
-      targetMaxMs,
-    );
+    return AxisChartDomain(minX: minX, maxX: maxX, minY: minY, maxY: maxY);
   }
 
   (double, double) _computeWeightRangeForDateWindow(
@@ -154,6 +138,7 @@ class _WeightChartState extends State<WeightChart> {
     if (_weightMinY == newMin && _weightMaxY == newMax) return false;
     _weightMinY = newMin;
     _weightMaxY = newMax;
+    _viewController.setYViewFromValues(newMin, newMax);
     return true;
   }
 
@@ -163,11 +148,9 @@ class _WeightChartState extends State<WeightChart> {
   }
 
   void _onTransformationChanged() {
-    if (_sortedEntries.isEmpty || _isAdjustingTransformation) return;
+    if (_sortedEntries.isEmpty || _viewController.isAdjusting) return;
 
-    final viewport = _createViewport();
-    final (visibleMinX, visibleMaxX) =
-        viewport.getVisibleDataRange(_transformationController);
+    final (visibleMinX, visibleMaxX) = _viewController.getVisibleXRange();
     final newVisibleRange = visibleMaxX - visibleMinX;
 
     _minViewedDateMs = updateMinViewedDateMs(
@@ -190,9 +173,7 @@ class _WeightChartState extends State<WeightChart> {
     }
   }
 
-  void _updateChartTransformation(double chartWidth) {
-    _chartWidth = chartWidth;
-
+  void _applyInitialXView() {
     final (minTime, maxTime) = _getFullDataTimeRange();
     if (_sortedEntries.isEmpty) return;
 
@@ -203,9 +184,7 @@ class _WeightChartState extends State<WeightChart> {
       final targetMaxMs = dataMaxX;
       final targetMinMs = dataMaxX - _graphVisibleDuration;
 
-      _isAdjustingTransformation = true;
-      _adjustTransformationForRange(targetMinMs, targetMaxMs);
-      _isAdjustingTransformation = false;
+      _viewController.setXViewFromValues(targetMinMs, targetMaxMs);
 
       _minViewedDateMs = targetMinMs;
       _applyWeightRangeForDateWindow(targetMinMs, maxTime);
@@ -244,7 +223,7 @@ class _WeightChartState extends State<WeightChart> {
       maxScale: 500.0,
       panEnabled: true,
       scaleEnabled: true,
-      transformationController: _transformationController,
+      transformationController: _viewController.transformationController,
     );
   }
 
@@ -364,6 +343,24 @@ class _WeightChartState extends State<WeightChart> {
     );
   }
 
+  LineChartData _buildLineChartData(ChartPlotMetrics plotMetrics) {
+    final (minY, maxY) = _getWeightRange();
+    final domain = _getChartDomain(minY, maxY);
+    _viewController.updateDomain(domain);
+
+    return LineChartData(
+      borderData: FlBorderData(show: true),
+      minY: minY,
+      maxY: maxY,
+      minX: domain.minX,
+      maxX: domain.maxX,
+      gridData: _getGridData(),
+      lineBarsData: _getLineBarsData(_runningAverageDays),
+      titlesData: _getTitlesData(),
+      lineTouchData: _getLineTouchData(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<SettingsProvider>(
@@ -400,46 +397,31 @@ class _WeightChartState extends State<WeightChart> {
   }
 
   Widget _buildChart(SettingsProvider settingsProvider) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        _chartWidth = constraints.maxWidth;
+    final days = settingsProvider.runningAverageDays;
+    if (days != _runningAverageDays) {
+      _runningAverageDays = days;
+      _invalidateAveragesCache();
+      _recalculateWeightRangeFromViewport();
+    }
 
-        final days = settingsProvider.runningAverageDays;
-        if (days != _runningAverageDays) {
-          _runningAverageDays = days;
-          _invalidateAveragesCache();
-          _recalculateWeightRangeFromViewport();
+    if (!_initialTransformationApplied) {
+      _initialTransformationApplied = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _applyInitialXView();
+          setState(() {});
         }
+      });
+    }
 
-        if (!_initialTransformationApplied) {
-          _initialTransformationApplied = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _updateChartTransformation(_chartWidth);
-          });
-        }
-
-        final (minY, maxY) = _getWeightRange();
-        final (minX, maxX) = _getChartXBounds();
-
-        return SizedBox(
-          width: double.infinity,
-          height: 200,
-          child: LineChart(
-            transformationConfig: _getTransformationConfig(),
-            LineChartData(
-              borderData: FlBorderData(show: true),
-              minY: minY,
-              maxY: maxY,
-              minX: minX,
-              maxX: maxX,
-              gridData: _getGridData(),
-              lineBarsData: _getLineBarsData(settingsProvider.runningAverageDays),
-              titlesData: _getTitlesData(),
-              lineTouchData: _getLineTouchData(),
-            ),
-          ),
-        );
-      },
+    return SizedBox(
+      width: double.infinity,
+      height: 200,
+      child: ViewportLineChart(
+        controller: _viewController,
+        transformationConfig: _getTransformationConfig(),
+        dataBuilder: (plotMetrics, _) => _buildLineChartData(plotMetrics),
+      ),
     );
   }
 }

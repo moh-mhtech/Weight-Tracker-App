@@ -45,6 +45,7 @@ dependencies:
   
   # Charts for displaying weight graphs
   fl_chart: ^1.0.0
+  vector_math: ^2.1.4
   
   # Date utilities
   intl: ^0.20.2
