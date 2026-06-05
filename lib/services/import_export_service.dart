@@ -7,6 +7,8 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models/weight_entry.dart';
 import 'csv_service.dart';
+import 'mobile_file_writer.dart'
+    if (dart.library.html) 'mobile_file_writer_stub.dart';
 
 class ImportResult {
   final List<WeightEntry>? entries;
@@ -82,16 +84,10 @@ class ImportExportService {
     }
 
     final tempDir = await getTemporaryDirectory();
-    final filePath = '${tempDir.path}/$fileName';
-    final xFile = XFile.fromData(
-      bytes,
-      name: fileName,
-      mimeType: 'text/csv',
-      path: filePath,
-    );
+    final filePath = await writeCsvToTempDir(tempDir.path, fileName, bytes);
 
     await Share.shareXFiles(
-      [xFile],
+      [XFile(filePath, mimeType: 'text/csv', name: fileName)],
       subject: 'Weight data export',
       text: 'Weight data export',
     );

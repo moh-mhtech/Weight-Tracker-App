@@ -145,7 +145,10 @@ class DatabaseHelper {
   }
 
   Future<void> importWeightEntries(List<WeightEntry> entries) async {
-    for (final entry in entries) {
+    final sortedEntries = List<WeightEntry>.from(entries)
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+    for (final entry in sortedEntries) {
       await insertWeightEntry(entry);
     }
   }
