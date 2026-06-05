@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../database/database_helper.dart';
 import '../providers/settings_provider.dart';
+import '../services/csv_service.dart';
+import '../services/import_export_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final VoidCallback? onDataChanged;
@@ -14,6 +16,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
+  final ImportExportService _importExportService = ImportExportService();
   late TextEditingController _averagePeriodController;
   
   @override
@@ -36,6 +39,156 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _averagePeriodController.text = settingsProvider.runningAverageDays.toString();
   }
 
+
+  Future<void> _importData() async {
+    final settingsProvider = Provider.of<SettingsProvider>(context, listen: false);
+
+    try {
+      final result = await _importExportService.pickAndParseCsv(
+        settingsProvider.dateFormat,
+      );
+
+      if (!mounted || result.cancelled) {
+        return;
+      }
+
+      if (!result.hasEntries) {
+        final errorMessage = result.errors.isNotEmpty
+            ? result.errors.join('\n')
+            : 'No valid entries found in the selected file';
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Import Failed'),
+            content: Text(errorMessage),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      if (result.errors.isNotEmpty && mounted) {
+        final continueImport = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Import Warnings'),
+            content: Text(
+              '${result.errors.length} row(s) could not be parsed:\n\n'
+              '${result.errors.take(5).join('\n')}'
+              '${result.errors.length > 5 ? '\n...' : ''}\n\n'
+              'Import ${result.entries!.length} valid entries anyway?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Import'),
+              ),
+            ],
+          ),
+        );
+
+        if (continueImport != true) {
+          return;
+        }
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      final fileLabel = result.fileName ?? 'selected file';
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Import Data'),
+          content: Text(
+            'Import ${result.entries!.length} entries from $fileLabel?\n\n'
+            'Entries will be added to existing data.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Import'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed != true) {
+        return;
+      }
+
+      await _dbHelper.importWeightEntries(result.entries!);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Imported ${result.entries!.length} entries'),
+          ),
+        );
+        widget.onDataChanged?.call();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error importing data: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _exportData() async {
+    final settingsProvider = Provider.of<SettingsProvider>(context, listen: false);
+
+    try {
+      final entries = await _dbHelper.getAllWeightEntries();
+
+      if (entries.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No data to export')),
+          );
+        }
+        return;
+      }
+
+      final content = CsvService.buildCsvContent(
+        entries,
+        settingsProvider.dateFormat,
+        settingsProvider.runningAverageDays,
+      );
+
+      await _importExportService.exportCsv(
+        content: content,
+        fileName: CsvService.generateDefaultFilename(),
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Data exported successfully')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error exporting data: $e')),
+        );
+      }
+    }
+  }
 
   Future<void> _clearAllData() async {
     final confirmed = await showDialog<bool>(
@@ -172,7 +325,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               
               const SizedBox(height: 8),
-              
+
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.download),
+                  title: const Text('Export Data'),
+                  subtitle: const Text('Save weight data as CSV'),
+                  onTap: _exportData,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.upload),
+                  title: const Text('Import Data'),
+                  subtitle: const Text('Import weight data from CSV'),
+                  onTap: _importData,
+                ),
+              ),
+
+              const SizedBox(height: 8),
               
               // Clear All Data
               Card(
@@ -183,30 +357,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: _clearAllData,
                 ),
               ),
-              
-              // const SizedBox(height: 8),
-              
-              // // Export Data
-              // Card(
-              //   child: ListTile(
-              //     leading: const Icon(Icons.download),
-              //     title: const Text('Export Data'),
-              //     // subtitle: const Text('Copy data to clipboard as CSV'),
-              //     onTap: _exportData,
-              //   ),
-              // ),
-              
-              // const SizedBox(height: 8),
-              
-              // // Import Data
-              // Card(
-              //   child: ListTile(
-              //     leading: const Icon(Icons.upload),
-              //     title: const Text('Import Data'),
-              //     // subtitle: const Text('Import data from clipboard CSV'),
-              //     onTap: _importData,
-              //   ),
-              // ),
             ],
           );
         },

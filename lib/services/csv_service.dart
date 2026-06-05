@@ -1,228 +1,200 @@
-import 'dart:io';
-import 'dart:convert';
 import 'package:intl/intl.dart';
 import '../models/weight_entry.dart';
+import 'average_calculation_service.dart';
+import 'chart_viewport_service.dart';
+
+class CsvParseResult {
+  final List<WeightEntry> entries;
+  final List<String> errors;
+
+  const CsvParseResult({required this.entries, required this.errors});
+
+  bool get hasEntries => entries.isNotEmpty;
+}
+
+class CsvValidationResult {
+  final bool isValid;
+  final int entryCount;
+  final String? error;
+
+  const CsvValidationResult({
+    required this.isValid,
+    this.entryCount = 0,
+    this.error,
+  });
+}
 
 class CsvService {
-  static const String _csvHeader = 'Date,Weight,Timestamp';
-  
-  /// Export weight entries to a CSV file
-  static Future<String> exportToCsv(List<WeightEntry> entries, String filePath) async {
-    try {
-      final file = File(filePath);
-      final buffer = StringBuffer();
-      
-      // Add CSV header
-      buffer.writeln(_csvHeader);
-      
-      // Sort entries by date
-      final sortedEntries = List<WeightEntry>.from(entries)
-        ..sort((a, b) => a.date.compareTo(b.date));
-      
-      // Add data rows
-      for (final entry in sortedEntries) {
-        final dateStr = DateFormat('yyyy-MM-dd').format(entry.date);
-        final timeStr = DateFormat('HH:mm:ss').format(entry.date);
-        final timestamp = entry.date.millisecondsSinceEpoch;
-        
-        buffer.writeln('$dateStr,$timeStr,${entry.weight},$timestamp');
-      }
-      
-      // Convert to bytes for mobile platforms
-      final csvContent = buffer.toString();
-      final bytes = utf8.encode(csvContent);
-      
-      // Write to file using bytes (required for Android/iOS)
-      await file.writeAsBytes(bytes);
-      return filePath;
-    } catch (e) {
-      throw Exception('Failed to export CSV: $e');
+  static const _exportHeader = 'Date,Weight,Average';
+  static const _supportedDateFormats = [
+    'dd/MM/yyyy',
+    'MM/dd/yyyy',
+    'yyyy-MM-dd',
+  ];
+
+  static CsvParseResult parseCsvContent(String content, String dateFormat) {
+    var text = content;
+    if (text.startsWith('\uFEFF')) {
+      text = text.substring(1);
     }
-  }
-  
-  /// Import weight entries from a CSV file
-  static Future<List<WeightEntry>> importFromCsv(String filePath) async {
-    try {
-      final file = File(filePath);
-      if (!await file.exists()) {
-        throw Exception('File does not exist: $filePath');
-      }
-      
-      final content = await file.readAsString();
-      final lines = content.split('\n');
-      
-      if (lines.isEmpty) {
-        throw Exception('CSV file is empty');
-      }
-      
-      // Skip header line
-      final dataLines = lines.skip(1).where((line) => line.trim().isNotEmpty).toList();
-      
-      final entries = <WeightEntry>[];
-      
-      for (int i = 0; i < dataLines.length; i++) {
-        try {
-          final line = dataLines[i];
-          final parts = line.split(',');
-          
-          if (parts.length < 3) {
-            throw Exception('Invalid CSV format at line ${i + 2}: insufficient columns');
-          }
-          
-          // Parse date and time
-          final dateStr = parts[0].trim();
-          final timeStr = parts[1].trim();
-          final weightStr = parts[2].trim();
-          
-          // Parse weight
-          final weight = double.tryParse(weightStr);
-          if (weight == null) {
-            throw Exception('Invalid weight value at line ${i + 2}: $weightStr');
-          }
-          
-          // Parse date and time
-          DateTime date;
-          try {
-            if (parts.length >= 4) {
-              // Use timestamp if available
-              final timestamp = int.tryParse(parts[3].trim());
-              if (timestamp != null) {
-                date = DateTime.fromMillisecondsSinceEpoch(timestamp);
-              } else {
-                date = _parseDateTime(dateStr, timeStr);
-              }
-            } else {
-              date = _parseDateTime(dateStr, timeStr);
-            }
-          } catch (e) {
-            throw Exception('Invalid date/time format at line ${i + 2}: $dateStr $timeStr');
-          }
-          
-          entries.add(WeightEntry(
-            weight: weight,
-            date: date,
-          ));
-        } catch (e) {
-          throw Exception('Error parsing line ${i + 2}: $e');
-        }
-      }
-      
-      return entries;
-    } catch (e) {
-      throw Exception('Failed to import CSV: $e');
-    }
-  }
-  
-  /// Parse date and time strings into DateTime
-  static DateTime _parseDateTime(String dateStr, String timeStr) {
-    try {
-      // Try different date formats
-      final dateFormats = [
-        'yyyy-MM-dd',
-        'dd/MM/yyyy',
-        'MM/dd/yyyy',
-        'dd-MM-yyyy',
-        'MM-dd-yyyy',
-      ];
-      
-      DateTime? date;
-      for (final format in dateFormats) {
-        try {
-          date = DateFormat(format).parse(dateStr);
-          break;
-        } catch (e) {
-          // Try next format
-        }
-      }
-      
-      if (date == null) {
-        throw Exception('Unable to parse date: $dateStr');
-      }
-      
-      // Parse time
-      final timeFormats = ['HH:mm:ss', 'HH:mm', 'H:mm:ss', 'H:mm'];
-      DateTime? time;
-      for (final format in timeFormats) {
-        try {
-          time = DateFormat(format).parse(timeStr);
-          break;
-        } catch (e) {
-          // Try next format
-        }
-      }
-      
-      if (time == null) {
-        // If time parsing fails, use midnight
-        time = DateTime(1970, 1, 1, 0, 0, 0);
-      }
-      
-      // Combine date and time
-      return DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-        time.second,
+
+    final lines = text
+        .split(RegExp(r'\r?\n'))
+        .where((line) => line.trim().isNotEmpty)
+        .toList();
+
+    if (lines.isEmpty) {
+      return const CsvParseResult(
+        entries: [],
+        errors: ['CSV file is empty'],
       );
-    } catch (e) {
-      throw Exception('Failed to parse date/time: $dateStr $timeStr');
     }
+
+    final delimiter = _detectDelimiter(lines.first);
+    final headerParts = lines.first
+        .split(delimiter)
+        .map((part) => part.trim().toLowerCase())
+        .toList();
+
+    if (headerParts.length < 2 ||
+        headerParts[0] != 'date' ||
+        !headerParts[1].startsWith('weight')) {
+      return const CsvParseResult(
+        entries: [],
+        errors: ['Invalid header: expected Date and Weight columns'],
+      );
+    }
+
+    final entries = <WeightEntry>[];
+    final errors = <String>[];
+
+    for (var i = 1; i < lines.length; i++) {
+      final lineNumber = i + 1;
+      final parts = lines[i].split(delimiter);
+
+      if (parts.length < 2) {
+        errors.add('Line $lineNumber: insufficient columns');
+        continue;
+      }
+
+      final dateStr = parts[0].trim();
+      final weightStr = parts[1].trim();
+
+      if (dateStr.isEmpty && weightStr.isEmpty) {
+        continue;
+      }
+
+      final weight = _parseDecimal(weightStr);
+
+      if (weight == null) {
+        errors.add('Line $lineNumber: invalid weight "$weightStr"');
+        continue;
+      }
+
+      try {
+        final date = _parseDate(dateStr, dateFormat);
+        entries.add(WeightEntry(weight: weight, date: date));
+      } catch (_) {
+        errors.add('Line $lineNumber: invalid date "$dateStr"');
+      }
+    }
+
+    return CsvParseResult(entries: entries, errors: errors);
   }
-  
-  /// Generate a default filename with timestamp
+
+  static CsvValidationResult validateCsvContent(
+    String content,
+    String dateFormat,
+  ) {
+    final result = parseCsvContent(content, dateFormat);
+
+    if (result.entries.isEmpty) {
+      final error = result.errors.isNotEmpty
+          ? result.errors.first
+          : 'No data rows found';
+      return CsvValidationResult(isValid: false, error: error);
+    }
+
+    if (result.errors.isNotEmpty) {
+      return CsvValidationResult(
+        isValid: false,
+        entryCount: result.entries.length,
+        error: result.errors.first,
+      );
+    }
+
+    return CsvValidationResult(
+      isValid: true,
+      entryCount: result.entries.length,
+    );
+  }
+
+  static String buildCsvContent(
+    List<WeightEntry> entries,
+    String dateFormat,
+    int averagePeriod,
+  ) {
+    final sortedEntries = List<WeightEntry>.from(entries)
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+    final averages = AverageCalculationService.calcDateAverages(
+      sortedEntries,
+      averagePeriod,
+    );
+
+    final buffer = StringBuffer()..writeln(_exportHeader);
+
+    for (final entry in sortedEntries) {
+      final dateStr = DateFormat(dateFormat).format(entry.date);
+      final dateKey = entry.date.dateOnly;
+      final average = averages[dateKey];
+      final averageStr = average != null ? average.toString() : '';
+
+      buffer.writeln('$dateStr,${entry.weight},$averageStr');
+    }
+
+    return buffer.toString();
+  }
+
   static String generateDefaultFilename() {
     final now = DateTime.now();
     final timestamp = DateFormat('yyyyMMdd_HHmmss').format(now);
     return 'weight_data_$timestamp.csv';
   }
-  
-  /// Validate CSV content before import
-  static Future<bool> validateCsvFile(String filePath) async {
-    try {
-      final file = File(filePath);
-      if (!await file.exists()) {
-        return false;
-      }
-      
-      final content = await file.readAsString();
-      final lines = content.split('\n');
-      
-      if (lines.isEmpty) {
-        return false;
-      }
-      
-      // Check header
-      if (!lines[0].contains('Date') || !lines[0].contains('Weight')) {
-        return false;
-      }
-      
-      // Check at least one data line
-      final dataLines = lines.skip(1).where((line) => line.trim().isNotEmpty).toList();
-      if (dataLines.isEmpty) {
-        return false;
-      }
-      
-      // Try to parse first data line
-      try {
-        final firstLine = dataLines[0];
-        final parts = firstLine.split(',');
-        if (parts.length < 3) {
-          return false;
-        }
-        
-        // Check if weight can be parsed
-        final weight = double.tryParse(parts[2].trim());
-        if (weight == null) {
-          return false;
-        }
-      } catch (e) {
-        return false;
-      }
-      
-      return true;
-    } catch (e) {
-      return false;
+
+  static String _detectDelimiter(String headerLine) {
+    final semiParts = headerLine
+        .split(';')
+        .map((part) => part.trim().toLowerCase())
+        .toList();
+    if (semiParts.length >= 2 &&
+        semiParts[0] == 'date' &&
+        semiParts[1].startsWith('weight')) {
+      return ';';
     }
+    return ',';
+  }
+
+  static double? _parseDecimal(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.contains(',') && !trimmed.contains('.')) {
+      return double.tryParse(trimmed.replaceAll(',', '.'));
+    }
+    return double.tryParse(trimmed);
+  }
+
+  static DateTime _parseDate(String dateStr, String primaryFormat) {
+    final formats = [primaryFormat, ..._supportedDateFormats];
+
+    for (final format in formats.toSet()) {
+      try {
+        final parsed = DateFormat(format).parse(dateStr);
+        return normalizeDate(parsed);
+      } catch (_) {
+        // Try next format.
+      }
+    }
+
+    throw FormatException('Unable to parse date: $dateStr');
   }
 }
