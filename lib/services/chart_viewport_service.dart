@@ -29,23 +29,36 @@ extension DateNormalization on DateTime {
   return (min, max);
 }
 
-/// Calculates X-axis (time) tick interval based on visible range.
+/// Y-axis padding above/below the min/max of viewed measurements and averages.
+/// Returns 0.5 for kg and 1.0 for lbs.
+double chartWeightPaddingForUnit(String unit) {
+  return unit == 'lbs' ? 1.0 : 0.5;
+}
+
+/// Calculates X-axis (time) tick interval from visible range and plot width.
 /// Returns interval in milliseconds.
 ///
-/// Behavior (max 16 ticks):
-/// - < 16 days visible: 1 day interval
-/// - 16-31 days visible: 2 day interval
-/// - 32-63 days visible: 4 day interval
-/// - 64+ days: continues doubling
-double calculateTimeTickInterval(double visibleRangeMs) {
+/// Plot width sets the maximum tick count (48px per label). Uses 1-day ticks
+/// while the visible range fits within that cap; otherwise doubles the interval
+/// (2d, 4d, 8d …) until tick count is within the cap.
+double calculateTimeTickInterval({
+  required double visibleRangeMs,
+  required double plotWidthPx,
+  double minLabelSpacingPx = 18,
+  int minTicks = 3,
+}) {
   const double oneDay = Duration.millisecondsPerDay * 1.0;
-  const double baseThreshold = 16 * oneDay;
+  if (visibleRangeMs <= 0 || plotWidthPx <= 0) return oneDay;
 
-  if (visibleRangeMs < baseThreshold) return oneDay;
+  final maxTicks = max(minTicks, (plotWidthPx / minLabelSpacingPx).floor());
 
-  final ratio = visibleRangeMs / baseThreshold;
-  final doublings = ratio.floor().bitLength - 1;
-  return oneDay * (1 << doublings);
+  if (visibleRangeMs <= maxTicks * oneDay) return oneDay;
+
+  var interval = oneDay;
+  while (visibleRangeMs / interval > maxTicks) {
+    interval *= 2;
+  }
+  return interval;
 }
 
 /// Calculates "nice" Y-axis intervals for the given range.

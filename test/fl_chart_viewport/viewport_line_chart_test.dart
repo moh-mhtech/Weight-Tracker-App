@@ -10,7 +10,7 @@ import 'test_data_factory.dart';
 
 const double graphTimePadding = Duration.millisecondsPerDay / 2;
 const double graphVisibleDuration =
-    10 * Duration.millisecondsPerDay + 2 * graphTimePadding;
+    24 * Duration.millisecondsPerDay + 2 * graphTimePadding;
 
 class _ChartHarness extends StatefulWidget {
   final AxisChartViewController controller;

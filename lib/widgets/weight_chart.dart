@@ -8,11 +8,10 @@ import '../services/average_calculation_service.dart';
 import '../services/chart_viewport_service.dart';
 import '../fl_chart_viewport/fl_chart_viewport.dart';
 
-// 11 days of data + 12h padding on each end = 12 calendar days on the axis
+// 24 days of data + 12h padding on each end = 25 calendar days on the axis
 const double _graphTimePadding = Duration.millisecondsPerDay / 2;
-const double _graphWeightPadding = 0.2;
 const double _graphVisibleDuration =
-    10 * Duration.millisecondsPerDay + 2 * _graphTimePadding;
+    24 * Duration.millisecondsPerDay + 2 * _graphTimePadding;
 
 class WeightChart extends StatefulWidget {
   final List<WeightEntry> weightEntries;
@@ -31,11 +30,13 @@ class _WeightChartState extends State<WeightChart> {
   double? _weightMaxY;
   double? _minViewedDateMs;
   int _runningAverageDays = 5;
+  String _weightUnit = 'kg';
 
   Map<DateTime, double> _cachedRunningAverages = {};
   int _cachedAverageDays = 0;
 
   double _visibleTimeRange = _graphVisibleDuration;
+  double _plotWidth = 0;
 
   @override
   void initState() {
@@ -129,7 +130,8 @@ class _WeightChartState extends State<WeightChart> {
 
     if (values.isEmpty) return (0.0, 0.0);
     final (min, max) = getMinMax(values);
-    return (min - _graphWeightPadding, max + _graphWeightPadding);
+    final padding = chartWeightPaddingForUnit(_weightUnit);
+    return (min - padding, max + padding);
   }
 
   bool _applyWeightRangeForDateWindow(double windowMinMs, double windowMaxMs) {
@@ -163,8 +165,14 @@ class _WeightChartState extends State<WeightChart> {
       _latestEntryMs,
     );
 
-    final oldInterval = calculateTimeTickInterval(_visibleTimeRange);
-    final newInterval = calculateTimeTickInterval(newVisibleRange);
+    final oldInterval = calculateTimeTickInterval(
+      visibleRangeMs: _visibleTimeRange,
+      plotWidthPx: _plotWidth,
+    );
+    final newInterval = calculateTimeTickInterval(
+      visibleRangeMs: newVisibleRange,
+      plotWidthPx: _plotWidth,
+    );
 
     if (weightRangeChanged || oldInterval != newInterval) {
       setState(() => _visibleTimeRange = newVisibleRange);
@@ -248,8 +256,11 @@ class _WeightChartState extends State<WeightChart> {
     );
   }
 
-  FlGridData _getGridData() {
-    final timeInterval = calculateTimeTickInterval(_visibleTimeRange);
+  FlGridData _getGridData(double plotWidth) {
+    final timeInterval = calculateTimeTickInterval(
+      visibleRangeMs: _visibleTimeRange,
+      plotWidthPx: plotWidth,
+    );
     final (minY, maxY) = _getWeightRange();
     final (_, weightGridInterval) = calculateWeightIntervals(minY, maxY);
 
@@ -281,8 +292,11 @@ class _WeightChartState extends State<WeightChart> {
     ];
   }
 
-  FlTitlesData _getTitlesData() {
-    final timeInterval = calculateTimeTickInterval(_visibleTimeRange);
+  FlTitlesData _getTitlesData(double plotWidth) {
+    final timeInterval = calculateTimeTickInterval(
+      visibleRangeMs: _visibleTimeRange,
+      plotWidthPx: plotWidth,
+    );
     final (minY, maxY) = _getWeightRange();
     final (weightTickInterval, _) = calculateWeightIntervals(minY, maxY);
 
@@ -357,6 +371,7 @@ class _WeightChartState extends State<WeightChart> {
   }
 
   LineChartData _buildLineChartData(ChartPlotMetrics plotMetrics) {
+    _plotWidth = plotMetrics.plotWidth;
     final (minY, maxY) = _getWeightRange();
     final domain = _getChartDomain(minY, maxY);
     _viewController.updateDomain(domain);
@@ -367,9 +382,9 @@ class _WeightChartState extends State<WeightChart> {
       maxY: maxY,
       minX: domain.minX,
       maxX: domain.maxX,
-      gridData: _getGridData(),
+      gridData: _getGridData(plotMetrics.plotWidth),
       lineBarsData: _getLineBarsData(_runningAverageDays),
-      titlesData: _getTitlesData(),
+      titlesData: _getTitlesData(plotMetrics.plotWidth),
       lineTouchData: _getLineTouchData(),
     );
   }
@@ -414,6 +429,12 @@ class _WeightChartState extends State<WeightChart> {
     if (days != _runningAverageDays) {
       _runningAverageDays = days;
       _invalidateAveragesCache();
+      _recalculateWeightRangeFromViewport();
+    }
+
+    final unit = settingsProvider.weightUnit;
+    if (unit != _weightUnit) {
+      _weightUnit = unit;
       _recalculateWeightRangeFromViewport();
     }
 
