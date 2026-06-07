@@ -9,7 +9,7 @@ class SettingsProvider extends ChangeNotifier {
   // Default values
   static const String _defaultWeightUnit = 'kg';
   static const String _defaultDateFormat = 'dd/MM/yyyy';
-  static const int _defaultRunningAverageDays = 5;
+  static const int _defaultRunningAverageDays = 7;
 
   // Current settings state
   String _weightUnit = _defaultWeightUnit;
@@ -24,11 +24,12 @@ class SettingsProvider extends ChangeNotifier {
   // Initialize settings from SharedPreferences
   Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    
+
     _weightUnit = prefs.getString(_weightUnitKey) ?? _defaultWeightUnit;
     _dateFormat = prefs.getString(_dateFormatKey) ?? _defaultDateFormat;
-    _runningAverageDays = prefs.getInt(_runningAverageDaysKey) ?? _defaultRunningAverageDays;
-    
+    _runningAverageDays =
+        prefs.getInt(_runningAverageDaysKey) ?? _defaultRunningAverageDays;
+
     notifyListeners();
   }
 

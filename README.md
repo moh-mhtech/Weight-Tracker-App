@@ -1,138 +1,175 @@
 # WeightGraph: Moving Average Chart
 
-A Flutter application for tracking weight measurements with interactive charts and moving averages.
+A Flutter application for tracking weight measurements with interactive charts, configurable running averages, and CSV import/export.
 
 ## Features
 
-- **Weight Entry**: Add weight measurements with date selection
-- **Interactive Chart**: Interactive chart showing individual measurements and moving average
-- **Data Management**: Edit and delete weight entries
-- **Cross-Platform**: Works on Android, iOS, Web, Windows, macOS, and Linux
-- **Sample Data**: Includes realistic sample data for testing (debug mode only)
-- **Responsive Design**: Adapts to different screen sizes
-
-## Screenshots
-
-The app includes:
-- Clean weight entry form with date picker
-- Interactive chart with blue dots for measurements and red line for moving average
-- Comprehensive data table with edit/delete functionality
-- Sample data generation for testing
+- **Weight Entry**: Add measurements with a date picker and form validation
+- **Interactive Chart**: Pan and zoom a time-series chart of individual measurements and a running average
+- **Entry Table**: Browse, edit, and delete entries with running averages shown per row
+- **Settings**: Configure weight unit label, date format, and average period
+- **Import / Export**: Back up and restore data as CSV files
+- **Cross-Platform**: Android, iOS, Web, Windows, macOS, and Linux
+- **Sample Data**: Realistic debug-only sample data when the database is empty
+- **Responsive Design**: Layout adapts to different screen sizes
 
 ## Technical Features
 
-- **Database**: SQLite with platform-specific implementations
-  - Mobile: `sqflite` package
-  - Desktop: `sqflite_common_ffi` package  
-  - Web: `shared_preferences` package
-- **Charts**: `fl_chart` package for interactive visualizations
-- **State Management**: Flutter's built-in StatefulWidget
-- **Platform Detection**: Automatic platform-specific database initialization
+- **Database**: Platform-aware persistence
+  - Mobile: `sqflite`
+  - Desktop: `sqflite_common_ffi`
+  - Web: `shared_preferences` via `StorageService`
+- **Settings Storage**: `shared_preferences` (all platforms)
+- **Charts**: `fl_chart` with a custom `fl_chart_viewport` module for pan/zoom and axis scaling
+- **State Management**: `provider` with `SettingsProvider`; screen-level state in `StatefulWidget`
+- **Import / Export**: `file_picker` for CSV file selection and save dialogs
 
 ## Getting Started
 
 ### Prerequisites
 
 - Flutter SDK (latest stable version)
-- Dart SDK
-- Android Studio / VS Code with Flutter extensions
+- Dart SDK (^3.8.1)
+- Android Studio or VS Code with Flutter extensions
 
 ### Installation
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/moh-mhtech/Weight-Tracker-App.git
 cd Weight-Tracker-App
 ```
 
 2. Install dependencies:
+
 ```bash
 flutter pub get
 ```
 
 3. Run the app:
+
 ```bash
-# For Android
+# Default device
 flutter run
 
-# For Web (Chrome)
+# Web (Chrome)
 flutter run -d chrome
 
-# For Desktop
-flutter run -d windows  # Windows
-flutter run -d macos    # macOS
-flutter run -d linux    # Linux
+# Desktop
+flutter run -d windows   # Windows
+flutter run -d macos     # macOS
+flutter run -d linux     # Linux
 ```
 
 4. Build the app:
+
 ```bash
-# Dev
+# Android debug APK
 flutter build apk --debug
 
 # Release (Including fast copy)
 flutter build apk --release --target-platform android-arm64 --no-tree-shake-icons; Copy-Item build\app\outputs\flutter-apk\app-release.apk "C:\Users\mlhil\Dropbox\Apps\weightgraph.apk"
 
-# Bundle
+# Android App Bundle
 flutter build appbundle --release
 ```
 
+### Running Tests
+
+```bash
+flutter test
+```
 
 ## Project Structure
 
 ```
 lib/
-├── main.dart                    # App entry point
+├── main.dart                          # App entry point and theme
 ├── models/
-│   └── weight_entry.dart        # Weight entry data model
+│   └── weight_entry.dart              # Weight entry data model
 ├── database/
-│   └── database_helper.dart    # Database operations
+│   └── database_helper.dart           # CRUD and platform-aware storage
+├── providers/
+│   └── settings_provider.dart         # User settings (Provider)
 ├── services/
-│   ├── storage_service.dart    # Web storage implementation
-│   └── sample_data_service.dart # Sample data generation
+│   ├── storage_service.dart           # Web storage implementation
+│   ├── sample_data_service.dart       # Debug sample data generation
+│   ├── average_calculation_service.dart  # Running average logic
+│   ├── chart_viewport_service.dart    # Chart axis and tick helpers
+│   ├── csv_service.dart               # CSV parsing and export
+│   └── import_export_service.dart     # File picker import/export
 ├── screens/
-│   └── weight_tracking_app.dart # Main app screen
-└── widgets/
-    ├── weight_entry_form.dart   # Weight input form
-    └── weight_chart.dart        # Chart visualization
+│   ├── home_screen.dart               # Main screen
+│   └── settings_screen.dart           # Settings, import/export, clear data
+├── widgets/
+│   ├── weight_entry_form.dart         # Weight input form
+│   ├── weight_chart.dart              # Chart visualization
+│   ├── weight_entry_table.dart        # Entry list with edit/delete
+│   └── axis_chart_scaffold_widget.dart
+└── fl_chart_viewport/                 # Custom pan/zoom chart viewport
+    ├── axis_chart_view_controller.dart
+    ├── viewport_line_chart.dart
+    └── ...
+test/                                  # Unit and widget tests
 ```
 
 ## Key Components
 
 ### Weight Entry Form
-- Single-row layout with weight input, date picker, and add button
-- Form validation for weight values
-- Date selection with proper constraints
+
+- Single-row layout with weight input, date picker, and Add button
+- Validation for positive numeric weight values
+- Respects the selected weight unit label and date format from settings
 
 ### Chart Visualization
-- 14-day rolling window ending at latest measurement
-- Blue dots for individual measurements
-- Red line for 5-day running average
-- Responsive design that scales to window width
-- DD/MM date format on x-axis
 
-### Data Management
-- Complete CRUD operations (Create, Read, Update, Delete)
-- Platform-aware database implementation
-- Edit functionality with popup dialog
-- Delete confirmation dialog
+- Default 24-day visible time window ending at the latest measurement
+- Green dots for individual measurements; orange curved line for the running average
+- Horizontal pan and pinch-to-zoom
+- Y-axis auto-scales to the visible date range
+- X-axis labels use `dd MMM` format; tooltips show weight values
+- Average line segments break across gaps longer than the configured average period
+
+### Entry Table
+
+- Newest entries first, paginated in batches of 15 with a Load More control
+- Each row shows date, weight, running average, and edit/delete actions
+- Edit and delete use confirmation dialogs
+
+### Settings
+
+- **Weight Unit**: Display label for `kg` or `lbs` (values are stored as entered)
+- **Date Format**: `dd/MM/yyyy`, `MM/dd/yyyy`, or `yyyy-MM-dd`
+- **Average Period**: Number of days used for the running average (default: 7)
+- **Export Data**: Save all entries to CSV (`Date,Weight,Average` columns)
+- **Import Data**: Add entries from a CSV file, with row-level error reporting
+- **Clear All Data**: Delete all weight entries
 
 ## Sample Data
 
-In debug mode, the app automatically generates realistic sample data:
-- 40 days of weight measurements
-- Linear progression from 85kg to 80kg
-- Random variance of ±0.5kg
-- Skipped days and multiple measurements per day
-- Regeneration capability for testing
+In debug mode, sample data is generated automatically when the database is empty:
+
+- ~80 days of measurements spanning 90 kg to 80 kg
+- Random variance of ±0.5 kg
+- Skipped days, a multi-day gap, and multiple measurements on some days
+- A `SAMPLES` badge appears in the app bar when 30+ entries are present
+
+`SampleDataService.regenerateSampleData()` can replace existing sample data during development.
 
 ## Dependencies
 
-- `sqflite`: SQLite database for mobile platforms
-- `sqflite_common_ffi`: SQLite database for desktop platforms
-- `shared_preferences`: Web storage implementation
-- `fl_chart`: Chart visualization library
-- `intl`: Date formatting utilities
-- `path`: File path utilities
+| Package | Purpose |
+|---------|---------|
+| `sqflite` | SQLite on mobile |
+| `sqflite_common_ffi` | SQLite on desktop |
+| `shared_preferences` | Web weight storage and app settings |
+| `fl_chart` | Chart rendering |
+| `vector_math` | Chart transformation math |
+| `provider` | Settings state management |
+| `file_picker` | CSV import/export file dialogs |
+| `intl` | Date formatting |
+| `path` | Database file paths |
 
 ## Contributing
 
@@ -142,12 +179,8 @@ In debug mode, the app automatically generates realistic sample data:
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
 ## Acknowledgments
 
 - Flutter team for the excellent framework
-- fl_chart package for beautiful chart visualizations
-- SQLite team for the robust database engine
+- `fl_chart` for chart visualizations
+- SQLite for robust local storage
